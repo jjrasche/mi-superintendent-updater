@@ -1,6 +1,6 @@
 ﻿# flows/superintendent_update.py
 from prefect import flow
-from tasks.discovery import get_candidate_urls, fetch_page
+from tasks.discovery import get_candidate_urls, getSoup
 from models.database import get_session, District, DiscoveryRun, PageCandidate
 from datetime import datetime
 
@@ -57,7 +57,7 @@ def discover_superintendent_flow(district_name: str, domain: str):
         for i, url in enumerate(candidates[:5], 1):
             print(f"\n[{i}/{min(len(candidates), 5)}] ", end="")
             try:
-                page_data = fetch_page(url)
+                page_data = getSoup(url).text
                 results.append(page_data)
                 fetched_count += 1
                 

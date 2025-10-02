@@ -55,3 +55,13 @@ def llm_pick_best_urls(district_name: str, url_contexts: list[dict]) -> list[str
     content = response.choices[0].message.content.strip()
     result = json.loads(content)
     return result["selected_urls"][:5]
+
+def llm_filter_urls_by_path(district_name: str, urls: list[str]) -> list[str]:
+    """Quick LLM filter based only on URL paths"""
+    url_list = '\n'.join(f"{i+1}. {url}" for i, url in enumerate(urls[:100]))
+    system_prompt = """You filter URLs to find pages likely containing superintendent contact info.\nLook for: /admin, /leadership, /superintendent, /staff, /about, /contact, /directory\nAvoid: /news, /calendar, /sports, /lunch, /events, /students, /parents\nReply ONLY with valid JSON: {"top_urls": ["url1", "url2", ...]}"""
+    user_prompt = f"""District: {district_name}\n\nPick the top 20 URLs most likely to have the superintendent's contact information:\n\n{url_list}"""
+    response = client.chat.completions.create(model="llama-3.1-8b-instant", temperature=0.1, max_tokens=500, response_format={"type": "json_object"}, messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}])
+    content = response.choices[0].message.content.strip()
+    result = json.loads(content)
+    return result["top_urls"][:20]

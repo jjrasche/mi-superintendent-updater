@@ -17,6 +17,7 @@ class District(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     domain = Column(String, nullable=False)
+    homePage = Column(String, nullable=False)
     state = Column(String, default="MI")
     
     # Current superintendent info (denormalized for quick access)
