@@ -6,24 +6,25 @@ from datetime import datetime
 
 
 @flow(name="discover-superintendent", log_prints=True)
-def discover_superintendent_flow(district_name: str, domain: str):
+def discover_superintendent_flow(district: District):
     """Main discovery flow for finding superintendent pages"""
     print(f"\n{'='*60}")
-    print(f"Starting discovery for: {district_name}")
-    print(f"Domain: {domain}")
+    print(f"Starting discovery for: {district.name}")
+    print(f"Domain: {district.domain}")
     print(f"{'='*60}\n")
     
     session = get_session()
     
     try:
         # Get or create district
-        district = session.query(District).filter_by(name=district_name).first()
-        if not district:
-            district = District(name=district_name, domain=domain)
+        loadedDistrict = session.query(District).filter_by(name=district.name).first()
+        if not loadedDistrict:
+            district = District(name=district.name, domain=district.domain, home_page=district.home_page)
             session.add(district)
             session.commit()
             print(f"✓ Created new district record (ID: {district.id})")
         else:
+            district = loadedDistrict
             print(f"✓ Found existing district (ID: {district.id})")
         
         # Create discovery run
@@ -37,7 +38,7 @@ def discover_superintendent_flow(district_name: str, domain: str):
         print(f"✓ Started discovery run (ID: {run.id})\n")
         
         # Step 1: Get candidate URLs
-        candidates = get_candidate_urls(district_name, domain)
+        candidates = get_candidate_urls(district)
         print(f"\n✓ Found {len(candidates)} candidate URLs\n")
         
         run.candidates_found = len(candidates)
@@ -58,7 +59,7 @@ def discover_superintendent_flow(district_name: str, domain: str):
             print(f"\n[{i}/{min(len(candidates), 5)}] ", end="")
             try:
                 page_data = getSoup(url).text
-                results.append(page_data)
+                results.append({'url': url, 'page_data': page_data})
                 fetched_count += 1
                 
                 # Save page candidate
@@ -124,10 +125,13 @@ if __name__ == "__main__":
     
     # Test run with a real Michigan district
     results = discover_superintendent_flow(
-        district_name="Cass City Public Schools",
-        domain="casscityschools.org"
+        District(
+            name="Cass City Public Schools",
+            domain="casscityschools.org",
+            home_page="https://casscityschools.org"
+        )
     )
-    
+
     print(f"\nFinal Results:")
     print(f"  Pages successfully fetched: {len(results)}")
     for result in results:

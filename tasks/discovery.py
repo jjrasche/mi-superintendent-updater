@@ -10,7 +10,7 @@ import requests
 @task(retries=2, retry_delay_seconds=5)
 def get_candidate_urls(district: District) -> list[str]:
     """Get candidate URLs via sitemap, then intelligently pick best ones"""    
-    sitemap_urls = get_sitemap_urls(district.domain) or discover_from_homepage(district.homePage)
+    sitemap_urls = get_sitemap_urls(district.domain) or discover_from_homepage(district.home_page)
     top_urls = llm_filter_urls_by_path(district.name, sitemap_urls)
     print(f"  Found {len(sitemap_urls)} URLs in sitemap. LLM filtered down to {top_urls}")
     url_contexts = [getPageContext(url) for url in top_urls]
