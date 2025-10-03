@@ -35,6 +35,7 @@ screenshots/
 *.sqlite3
 .env
 .env.local
+seed.py
 
 # Prefect
 .prefect/

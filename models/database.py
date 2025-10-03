@@ -25,14 +25,14 @@ class District(Base):
     current_superintendent_email = Column(String)
     current_superintendent_phone = Column(String)
     current_superintendent_title = Column(String)
+    # CRM source
     crm_superintendent_name = Column(String)
     crm_superintendent_email = Column(String)
     crm_superintendent_phone = Column(String)
     crm_superintendent_title = Column(String)
+    crm_last_updated = Column(DateTime)
     
     last_checked = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
     # Relationships
     discovery_runs = relationship("DiscoveryRun", back_populates="district")
     superintendent_history = relationship("SuperintendentHistory", back_populates="district")
@@ -72,6 +72,7 @@ class PageCandidate(Base):
     title = Column(String)
     discovery_rank = Column(Integer)  # 1-5 from LLM ranking
     discovery_score = Column(Float)   # Confidence in URL being relevant
+    status = Column(String, default="pending")  # pending, fetched, error
     
     # Fetch results
     fetched_at = Column(DateTime)

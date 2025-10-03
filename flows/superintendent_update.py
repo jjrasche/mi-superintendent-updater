@@ -1,10 +1,10 @@
 # flows/superintendent_update.py
 from prefect import flow
-from tasks.discovery import get_candidate_urls, getSoup
+from tasks.discovery import get_candidate_urls
 from models.database import get_session, District, DiscoveryRun, PageCandidate
 from datetime import datetime
-
 from tasks.extract import extract_contact
+from models.seed import seed_database
 
 @flow(name="discover-superintendent", log_prints=True)
 def discover_superintendent_flow(district: District):
@@ -69,8 +69,9 @@ def get_districts_to_process(session, limit=5, state="MI", only_unchecked=False)
 if __name__ == "__main__":
     from models.database import init_db
     init_db()
+    seed_database()
     session = get_session()
-    test_districts = get_districts_to_process(session, limit=3, only_unchecked=False)
+    test_districts = get_districts_to_process(session, limit=1, only_unchecked=False)
     for district in test_districts:
         discover_superintendent_flow(district)
     session.close()
