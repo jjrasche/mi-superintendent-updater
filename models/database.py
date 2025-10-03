@@ -25,6 +25,10 @@ class District(Base):
     current_superintendent_email = Column(String)
     current_superintendent_phone = Column(String)
     current_superintendent_title = Column(String)
+    crm_superintendent_name = Column(String)
+    crm_superintendent_email = Column(String)
+    crm_superintendent_phone = Column(String)
+    crm_superintendent_title = Column(String)
     
     last_checked = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
