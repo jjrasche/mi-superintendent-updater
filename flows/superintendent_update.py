@@ -59,23 +59,19 @@ def saveCandidate(run: DiscoveryRun, context: dict, session):
         candidate = PageCandidate( discovery_run_id=run.id, url=url, title="Error", html=str(e), fetched_at=datetime.utcnow(), status="error")
     session.add(candidate)
 
-
+def get_districts_to_process(session, limit=5, state="MI", only_unchecked=False):
+    """Get a limited set of districts for testing"""
+    query = session.query(District).filter_by(state=state)
+    if only_unchecked:
+        query = query.filter(District.last_checked.is_(None))
+    return query.limit(limit).all()
 
 if __name__ == "__main__":
-    # Initialize database first
     from models.database import init_db
     init_db()
-    
-    # Test run with a real Michigan district
-    results = discover_superintendent_flow(
-        District(
-            name="Cass City Public Schools",
-            domain="casscityschools.org",
-            home_page="https://casscityschools.org"
-        )
-    )
-
-    print(f"\nFinal Results:")
-    print(f"  Pages successfully fetched: {len(results)}")
-    for result in results:
-        print(f"    - {result['url']}")
+    session = get_session()
+    test_districts = get_districts_to_process(session, limit=3, only_unchecked=False)
+    for district in test_districts:
+        discover_superintendent_flow(district)
+    session.close()
+    print(f"\n\n{'='*60}\nCompleted processing {len(test_districts)} districts\n{'='*60}")

@@ -9,7 +9,7 @@ from utils.llm import llm_get_json
 @task(retries=2, retry_delay_seconds=3)
 def extract_contact(page_candidate: PageCandidate, session) -> PageCandidate:
     """Extract superintendent contact info from a page's HTML"""
-    text = clean_html_to_text(page_candidate.content)
+    text = clean_html_to_text(page_candidate.html)
     system_prompt = """You are an expert at extracting superintendent contact information from school district webpages.\n\nYour task: Find ONLY the superintendent (not assistant superintendent, board members, principals, etc).\nExtract: full name, official title, email address, phone number.\n\nReply ONLY with valid JSON in this exact format:\n{\n  "name": "John Smith",\n  "title": "Superintendent",\n  "email": "jsmith@district.org",\n  "phone": "(555) 123-4567",\n  "confidence": 0.95\n}\n\nIf you cannot find the superintendent's info, return empty strings and confidence 0.0"""
     user_prompt = f"""Extract the superintendent's contact information from this school district webpage.\n\nPage content:\n{text}"""
     try:
