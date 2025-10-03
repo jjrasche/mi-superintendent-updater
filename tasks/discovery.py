@@ -14,16 +14,18 @@ def get_candidate_urls(district: District) -> list[str]:
     top_urls = llm_filter_urls_by_path(district.name, sitemap_urls)
     print(f"  Found {len(sitemap_urls)} URLs in sitemap. LLM filtered down to {top_urls}")
     url_contexts = [getPageContext(url) for url in top_urls]
-    return llm_pick_best_urls(district.name, url_contexts)
+    best_urls = llm_pick_best_urls(district.name, url_contexts)
+    return [ctx for ctx in url_contexts if ctx['url'] in best_urls]
 
 def getPageContext(url: str) -> dict:
     try:
         soup = getSoup(url)
+        html = str(soup)
         title = soup.title.string or "No title"
         headings = [h.get_text(strip=True) for h in soup.find_all(['h1', 'h2', 'h3'])[:5]]
-        return { 'url': url, 'title': title, 'headings': headings }
+        return { 'url': url, 'title': title, 'headings': headings, 'html': html }
     except:
-        return { 'url': url, 'title': "Error", 'headings': [] }
+        return { 'url': url, 'title': "Error", 'headings': [], 'html': "" }
 
 def getSoup(url: str) -> BeautifulSoup:
     html = requests.get(url, timeout=5, headers={ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }).text

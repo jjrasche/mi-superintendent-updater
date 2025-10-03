@@ -65,3 +65,12 @@ def llm_filter_urls_by_path(district_name: str, urls: list[str]) -> list[str]:
     content = response.choices[0].message.content.strip()
     result = json.loads(content)
     return result["top_urls"][:20]
+
+
+def llm_get_json(prompts: list[str], model: str = "llama-3.1-8b-instant") -> dict:
+    messages = [
+        {"role": "system" if i == 0 else "user", "content": prompt}
+        for i, prompt in enumerate(prompts)
+    ]
+    response = client.chat.completions.create( model=model, temperature=0.1, response_format={"type": "json_object"}, messages=messages )
+    return json.loads(response.choices[0].message.content.strip())

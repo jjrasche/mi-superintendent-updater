@@ -68,6 +68,8 @@ class PageCandidate(Base):
     discovery_run_id = Column(Integer, ForeignKey("discovery_runs.id"), nullable=False)
     
     url = Column(String, nullable=False)
+    html = Column(Text)
+    title = Column(String)
     discovery_rank = Column(Integer)  # 1-5 from LLM ranking
     discovery_score = Column(Float)   # Confidence in URL being relevant
     
