@@ -1,4 +1,4 @@
-﻿# tasks/discovery.py
+# tasks/discovery.py
 from prefect import task
 from urllib.parse import urljoin, urlparse
 from models.database import District

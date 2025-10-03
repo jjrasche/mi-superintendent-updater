@@ -1,111 +1,26 @@
-﻿# flows/superintendent_update.py
+# flows/superintendent_update.py
 from prefect import flow
 from tasks.discovery import get_candidate_urls, getSoup
 from models.database import get_session, District, DiscoveryRun, PageCandidate
 from datetime import datetime
 
-
 @flow(name="discover-superintendent", log_prints=True)
 def discover_superintendent_flow(district: District):
     """Main discovery flow for finding superintendent pages"""
-    print(f"\n{'='*60}")
-    print(f"Starting discovery for: {district.name}")
-    print(f"Domain: {district.domain}")
-    print(f"{'='*60}\n")
-    
-    session = get_session()
-    
+    print(f"\n{'='*60}\nStarting discovery for: {district.name}\nDomain: {district.domain}\n{'='*60}\n")
+    session = get_session()    
     try:
-        # Get or create district
-        loadedDistrict = session.query(District).filter_by(name=district.name).first()
-        if not loadedDistrict:
-            district = District(name=district.name, domain=district.domain, home_page=district.home_page)
-            session.add(district)
-            session.commit()
-            print(f"✓ Created new district record (ID: {district.id})")
-        else:
-            district = loadedDistrict
-            print(f"✓ Found existing district (ID: {district.id})")
-        
-        # Create discovery run
-        run = DiscoveryRun(
-            district_id=district.id,
-            started_at=datetime.utcnow(),
-            status="running"
-        )
+        district = session.query(District).filter_by(name=district.name).first()
+        run = DiscoveryRun( district_id=district.id, started_at=datetime.utcnow(), status="running" )
         session.add(run)
         session.commit()
-        print(f"✓ Started discovery run (ID: {run.id})\n")
-        
-        # Step 1: Get candidate URLs
-        candidates = get_candidate_urls(district)
-        print(f"\n✓ Found {len(candidates)} candidate URLs\n")
-        
+        candidates = get_candidate_urls(district)        
         run.candidates_found = len(candidates)
         session.commit()
-        
         for i, url in enumerate(candidates, 1):
             print(f"  {i}. {url}")
-        
-        # Step 2: Fetch each candidate
-        print(f"\n{'='*60}")
-        print("Fetching candidate pages...")
-        print(f"{'='*60}\n")
-        
-        results = []
-        fetched_count = 0
-        
-        for i, url in enumerate(candidates[:5], 1):
-            print(f"\n[{i}/{min(len(candidates), 5)}] ", end="")
-            try:
-                page_data = getSoup(url).text
-                results.append({'url': url, 'page_data': page_data})
-                fetched_count += 1
-                
-                # Save page candidate
-                page_candidate = PageCandidate(
-                    discovery_run_id=run.id,
-                    url=page_data['url'],
-                    discovery_rank=i,
-                    fetched_at=datetime.utcnow(),
-                    html_length=page_data['html_length'],
-                    screenshot_path=page_data.get('screenshot'),
-                    fetch_method="playwright" if page_data.get('screenshot') else "http"
-                )
-                session.add(page_candidate)
-                session.commit()
-                
-                print(f"✓ Success (HTML: {page_data['html_length']:,} chars)")
-                if page_data['screenshot']:
-                    print(f"  Screenshot: {page_data['screenshot']}")
-                    
-            except Exception as e:
-                print(f"✗ Failed: {e}")
-                
-                # Save failed candidate
-                page_candidate = PageCandidate(
-                    discovery_run_id=run.id,
-                    url=url,
-                    discovery_rank=i,
-                    fetched_at=datetime.utcnow()
-                )
-                session.add(page_candidate)
-                session.commit()
-        
-        # Update discovery run
-        run.completed_at = datetime.utcnow()
-        run.status = "completed"
-        run.pages_fetched = fetched_count
-        district.last_checked = datetime.utcnow()
-        session.commit()
-        
-        print(f"\n{'='*60}")
-        print(f"Discovery complete: {len(results)}/{len(candidates[:5])} pages fetched")
-        print(f"Discovery run ID: {run.id}")
-        print(f"{'='*60}\n")
-        
-        return results
-        
+        collectCandidates(district, run, candidates, session)
+        print(f"\n{'='*60}\nDiscovery run ID: {run.id}\n{'='*60}")
     except Exception as e:
         # Mark run as failed
         if 'run' in locals():
@@ -117,6 +32,26 @@ def discover_superintendent_flow(district: District):
     finally:
         session.close()
 
+
+def collectCandidates(district: District, run: DiscoveryRun, url: str, session):
+    """Collect candidate pages for a given district and discovery run"""
+    for url in url[:5]:  # Limit to top 5 candidates
+        saveCandidate(run, url, session)
+    run.completed_at = datetime.utcnow()
+    run.status = "completed"
+    district.last_checked = datetime.utcnow()
+    session.commit()
+
+def saveCandidate(run: DiscoveryRun, url: str, session):
+    """Fetch page content and save a PageCandidate object"""
+    try:
+        soup = getSoup(url)
+        title = soup.title.string if soup.title else "No title"
+        text = soup.get_text(separator="\n", strip=True)[:5000]  # Limit to first 5000 chars
+        candidate = PageCandidate( discovery_run_id=run.id, url=url, title=title, content=text, fetched_at=datetime.utcnow(), status="fetched")
+    except Exception as e:
+        candidate = PageCandidate( discovery_run_id=run.id, url=url, title="Error", content=str(e), fetched_at=datetime.utcnow(), status="error")
+    session.add(candidate)
 
 if __name__ == "__main__":
     # Initialize database first

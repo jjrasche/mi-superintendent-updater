@@ -1,4 +1,4 @@
-﻿import requests
+import requests
 from xml.etree import ElementTree
 
 def get_sitemap_urls(domain: str) -> list[str]:
