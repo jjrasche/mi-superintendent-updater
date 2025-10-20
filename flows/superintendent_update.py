@@ -24,26 +24,29 @@ def discover_superintendent_flow(district: District):
         session.close()
 
 def startDiscoveryRun(district: District, session) -> DiscoveryRun:
-    run = DiscoveryRun( district_id=district.id, started_at=datetime.utcnow(), status="running" )
+    run = DiscoveryRun( district_id=district.id, started_at=datetime.now(timezone.utc)
+, status="running" )
     session.add(run)
     session.commit()
     return run
 
 def handleError(run: DiscoveryRun, error: Exception, session):
-    if 'run' in locals():
-        run.status = "failed"
-        run.error_message = str(error)
-        run.completed_at = datetime.utcnow()
-        session.commit()
+    run.status = "failed"
+    run.error_message = str(error)
+    run.completed_at = datetime.now(timezone.utc)
+
+    session.commit()
     raise
 
 def collectCandidates(district: District, run: DiscoveryRun, candidate_contexts: list[dict], session):
     """Collect candidate pages for a given district and discovery run"""
     for context in candidate_contexts[:5]:  # Limit to top 5 candidates
         saveCandidate(run, context, session)
-    run.completed_at = datetime.utcnow()
+    run.completed_at = datetime.now(timezone.utc)
+
     run.status = "completed"
-    district.last_checked = datetime.utcnow()
+    district.last_checked = datetime.now(timezone.utc)
+
     session.commit()
 
 def saveCandidate(run: DiscoveryRun, context: dict, session):
@@ -52,11 +55,14 @@ def saveCandidate(run: DiscoveryRun, context: dict, session):
         url = context['url']
         html = context.get('html')
         title = context.get('title', "No title")
-        candidate = PageCandidate( discovery_run_id=run.id, url=url, title=title, html=html, fetched_at=datetime.utcnow(), status="fetched")
+        candidate = PageCandidate( discovery_run_id=run.id, url=url, title=title, html=html, fetched_at=datetime.now(timezone.utc)
+, status="fetched")
+        session.add(candidate)
         extract_contact(candidate, session)
         print(f"  Fetched and saved candidate: {url} (Title: {title})")
     except Exception as e:
-        candidate = PageCandidate( discovery_run_id=run.id, url=url, title="Error", html=str(e), fetched_at=datetime.utcnow(), status="error")
+        candidate = PageCandidate( discovery_run_id=run.id, url=url, title="Error", html=str(e), fetched_at=datetime.now(timezone.utc)
+, status="error")
     session.add(candidate)
 
 def get_districts_to_process(session, limit=5, state="MI", only_unchecked=False):
@@ -71,7 +77,7 @@ if __name__ == "__main__":
     init_db()
     seed_database()
     session = get_session()
-    test_districts = get_districts_to_process(session, limit=1, only_unchecked=False)
+    test_districts = get_districts_to_process(session, limit=5, only_unchecked=True)
     for district in test_districts:
         discover_superintendent_flow(district)
     session.close()

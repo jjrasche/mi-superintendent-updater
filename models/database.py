@@ -21,7 +21,7 @@ class District(Base):
     state = Column(String, default="MI")
     
     # Current superintendent info (denormalized for quick access)
-    current_superintendent_name = Column(String)
+    saveCandidatesuperintendent_name = Column(String)
     current_superintendent_email = Column(String)
     current_superintendent_phone = Column(String)
     current_superintendent_title = Column(String)

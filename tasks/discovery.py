@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 import requests
 
 @task(retries=2, retry_delay_seconds=5)
-def get_candidate_urls(district: District) -> list[str]:
+def get_candidate_urls(district: District) -> list[dict]:
     """Get candidate URLs via sitemap, then intelligently pick best ones"""    
     sitemap_urls = get_sitemap_urls(district.domain) or discover_from_homepage(district.home_page)
     top_urls = llm_filter_urls_by_path(district.name, sitemap_urls)
