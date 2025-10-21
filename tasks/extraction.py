@@ -1,16 +1,18 @@
-from typing import Dict, Optional
+from typing import Dict
 
 from utils.html_parser import parse_html_to_text
 from utils.llm import build_extraction_prompt, call_llm
+from utils.debug_logger import get_logger
 
 
-def extract_superintendent(html: str, district_name: str) -> Dict:
+def extract_superintendent(html: str, district_name: str, url: str) -> Dict:
     """
     Extract superintendent info from HTML using LLM.
     
     Args:
         html: Raw HTML
         district_name: District name for context
+        url: Source URL (for logging)
     
     Returns:
         {
@@ -18,29 +20,13 @@ def extract_superintendent(html: str, district_name: str) -> Dict:
             'title': str | None,
             'email': str | None,
             'phone': str | None,
-            'extracted_text': str,  # What was sent to LLM
+            'extracted_text': str,
             'llm_reasoning': str,
             'is_empty': bool
         }
-        
-    Process:
-        1. Parse HTML to text using parse_html_to_text()
-        2. Build LLM prompt with instructions
-        3. Call Groq API with llama-3.1-8b-instant
-        4. Parse JSON response
-        5. Return structured extraction
-        
-    LLM Instructions:
-        - Look for SUPERINTENDENT only (not assistants, principals, etc)
-        - Extract name, title, email, phone
-        - Explain reasoning
-        - Mark is_empty=True if nothing found
-    
-    Assumptions:
-        - HTML parsing preserves semantic meaning
-        - LLM can extract from cleaned text
-        - LLM reasoning is NOT a reliable confidence score
     """
+    logger = get_logger()
+    
     # Parse HTML to clean text
     cleaned_text = parse_html_to_text(html)
     
@@ -51,7 +37,7 @@ def extract_superintendent(html: str, district_name: str) -> Dict:
     try:
         result = call_llm(system_prompt, user_prompt)
         
-        return {
+        extraction_result = {
             'name': result.get('name'),
             'title': result.get('title'),
             'email': result.get('email'),
@@ -60,9 +46,21 @@ def extract_superintendent(html: str, district_name: str) -> Dict:
             'llm_reasoning': result.get('reasoning', ''),
             'is_empty': result.get('is_empty', False)
         }
+        
+        # Log everything for debugging
+        logger.log_page_fetch(
+            district_name=district_name,
+            url=url,
+            raw_html=html,
+            parsed_text=cleaned_text,
+            extraction_result=extraction_result
+        )
+        
+        return extraction_result
+        
     except Exception as e:
         # If LLM fails, return error state
-        return {
+        error_result = {
             'name': None,
             'title': None,
             'email': None,
@@ -71,3 +69,14 @@ def extract_superintendent(html: str, district_name: str) -> Dict:
             'llm_reasoning': f'LLM extraction failed: {str(e)}',
             'is_empty': True
         }
+        
+        # Still log the attempt
+        logger.log_page_fetch(
+            district_name=district_name,
+            url=url,
+            raw_html=html,
+            parsed_text=cleaned_text,
+            extraction_result=error_result
+        )
+        
+        return error_result

@@ -12,24 +12,10 @@ def run_district_check(district_id: int) -> Dict:
     """
     Unified workflow: check district for superintendent info.
     
-    Process:
-        1. Get district from DB
-        2. Get URL pool (URLs with successful extractions in last 3 attempts)
-        3. IF pool is empty:
-             → Run discovery: sitemap → LLM filter → get new URLs
-             → mode = 'discovery'
-           ELSE:
-             → Use existing pool
-             → mode = 'monitoring'
-        4. Fetch + extract from all URLs
-        5. Save FetchedPages + Extractions with appropriate mode
-        6. Update district.last_checked_at
-        7. Return summary
-    
     Returns:
         {
             'district_id': int,
-            'mode': str,  # 'discovery' or 'monitoring'
+            'mode': str,
             'urls_checked': int,
             'pages_fetched': int,
             'successful_extractions': int,
@@ -45,7 +31,9 @@ def run_district_check(district_id: int) -> Dict:
         if not district:
             raise ValueError(f"District {district_id} not found")
         
+        print(f"\n{'='*60}")
         print(f"Checking {district.name} ({district.domain})")
+        print(f"{'='*60}")
         
         # 2. Get URL pool
         print("Getting URL pool...")
@@ -59,9 +47,26 @@ def run_district_check(district_id: int) -> Dict:
             
             try:
                 all_urls = discover_urls(district.domain)
-                print(f"Found {len(all_urls)} URLs from discovery")
-                urls_to_check = filter_urls(all_urls, district.name)
-                print(f"Filtered to {len(urls_to_check)} URLs via LLM")
+                print(f"\n[DISCOVERY COMPLETE] Found {len(all_urls)} total URLs")
+                
+                # Print first 15 URLs for inspection
+                print("\nSample of discovered URLs:")
+                for i, url in enumerate(all_urls[:15], 1):
+                    print(f"  {i}. {url}")
+                if len(all_urls) > 15:
+                    print(f"  ... and {len(all_urls) - 15} more")
+                
+                urls_to_check, llm_reasoning = filter_urls(all_urls, district.name, district.domain)
+                print(f"\n[FILTERING COMPLETE] Selected {len(urls_to_check)} URLs")
+                
+                if llm_reasoning:
+                    print(f"\nLLM Reasoning:")
+                    print(f"  {llm_reasoning}")
+                
+                print("\nFinal selected URLs:")
+                for i, url in enumerate(urls_to_check, 1):
+                    print(f"  {i}. {url}")
+                
             except Exception as e:
                 print(f"Discovery failed: {str(e)}")
                 return {
@@ -78,6 +83,10 @@ def run_district_check(district_id: int) -> Dict:
             print(f"URL pool has {len(url_pool)} valid URLs - running monitoring")
             mode = 'monitoring'
             urls_to_check = url_pool
+            
+            print("\nURLs to monitor:")
+            for i, url in enumerate(urls_to_check, 1):
+                print(f"  {i}. {url}")
         
         # Counters
         pages_fetched = 0
@@ -86,8 +95,12 @@ def run_district_check(district_id: int) -> Dict:
         errors = 0
         
         # 4. Fetch and extract from each URL
-        for url in urls_to_check:
-            print(f"Processing: {url}")
+        print(f"\n{'='*60}")
+        print("Processing URLs...")
+        print(f"{'='*60}")
+        
+        for idx, url in enumerate(urls_to_check, 1):
+            print(f"\n[{idx}/{len(urls_to_check)}] Processing: {url}")
             
             # Fetch page
             fetch_result = fetch_page(url)
@@ -109,7 +122,8 @@ def run_district_check(district_id: int) -> Dict:
             if fetch_result['status'] == 'success':
                 extraction_result = extract_superintendent(
                     fetch_result['html'],
-                    district.name
+                    district.name,
+                    url  # Pass URL for logging
                 )
                 
                 # Create Extraction record
@@ -129,12 +143,16 @@ def run_district_check(district_id: int) -> Dict:
                 if extraction_result['is_empty']:
                     empty_extractions += 1
                     print(f"  → No superintendent found")
+                    if extraction_result['llm_reasoning']:
+                        print(f"     Reason: {extraction_result['llm_reasoning'][:100]}")
                 else:
                     successful_extractions += 1
-                    print(f"  → Found: {extraction_result['name']}")
+                    print(f"  → ✓ Found: {extraction_result['name']}")
+                    print(f"     Title: {extraction_result['title']}")
+                    print(f"     Email: {extraction_result['email']}")
             else:
                 errors += 1
-                print(f"  → Fetch failed: {fetch_result['error_message']}")
+                print(f"  → ✗ Fetch failed: {fetch_result['error_message']}")
         
         # 6. Update district
         district.last_checked_at = datetime.utcnow()
@@ -142,7 +160,9 @@ def run_district_check(district_id: int) -> Dict:
         # Commit all changes
         session.commit()
         
-        print(f"\nCheck complete!")
+        print(f"\n{'='*60}")
+        print(f"Check complete for {district.name}")
+        print(f"{'='*60}")
         print(f"  Mode: {mode}")
         print(f"  URLs checked: {len(urls_to_check)}")
         print(f"  Pages fetched: {pages_fetched}")
@@ -171,12 +191,6 @@ def run_district_check(district_id: int) -> Dict:
 def run_bulk_check(district_ids: List[int]) -> List[Dict]:
     """
     Run district checks for multiple districts.
-    
-    Args:
-        district_ids: List of district IDs to check
-    
-    Returns:
-        List of result dicts from run_district_check()
     """
     results = []
     

@@ -1,18 +1,23 @@
-
 from models.database import init_db
-from queries.superintendents import get_districts_needing_check
 from workflows.run import run_bulk_check
+from utils.debug_logger import get_logger
 
 
 def main():
-    """ Main entry point: Check all districts that need checking. """
+    """Main entry point: Check all districts that need checking."""
+    
+    # Initialize debug logger
+    logger = get_logger()
+    
     print("=" * 60)
     print("Superintendent Scraper - District Check")
+    print("=" * 60)
+    print(f"Debug logs will be saved to: {logger.run_dir}")
     print("=" * 60)
     
     # Run bulk check
     print(f"\nStarting bulk check...\n")
-    results = run_bulk_check([2,3,4,5,6,7,8,9,10])
+    results = run_bulk_check([i for i in range(11, 22)])
     
     # Summary
     print("\n" + "=" * 60)
@@ -33,10 +38,11 @@ def main():
     print(f"Total empty extractions: {total_empty}")
     print(f"Total errors: {total_errors}")
     print("=" * 60)
+    print(f"\nDebug logs saved to: {logger.run_dir}")
+    print("Check the logs for detailed HTML and extraction information")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    import sys
     init_db()
-    # Allow passing days as command line argument
     main()

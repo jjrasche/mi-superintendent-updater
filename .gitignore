@@ -36,6 +36,7 @@ screenshots/
 .env
 .env.local
 seed.py
+debug_logs/
 
 # Prefect
 .prefect/

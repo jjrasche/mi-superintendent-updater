@@ -11,25 +11,21 @@ def parse_html_to_text(html: str) -> str:
     
     Returns:
         Cleaned text preserving headings and structure
-        
-    Process:
-        1. Parse with BeautifulSoup
-        2. Remove <script>, <style>, <nav>, <footer>, <header>
-        3. Extract text preserving headings (mark with ##)
-        4. Separate sections with ---
-        5. Limit to 4000 chars
-        
-    Output Format:
-        ## Heading 1
-        Paragraph text here
-        
-        ## Heading 2
-        More text
-        ---
-        ## Another Section
-        ...
     """
-    soup = BeautifulSoup(html, 'html.parser')
+    # Detect if this is XML content (sitemap, RSS, etc.)
+    html_lower = html[:200].lower()
+    is_xml = (
+        html.strip().startswith('<?xml') or 
+        '<urlset' in html_lower or 
+        '<rss' in html_lower or
+        '<sitemap' in html_lower
+    )
+    
+    # Use appropriate parser
+    if is_xml:
+        soup = BeautifulSoup(html, 'xml')
+    else:
+        soup = BeautifulSoup(html, 'html.parser')
     
     # Remove unwanted elements
     for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript']):
@@ -60,7 +56,7 @@ def parse_html_to_text(html: str) -> str:
                 current_section.append(f"## {text}")
         
         # Handle paragraphs and divs
-        elif element.name in ['p', 'div', 'article', 'section']:
+        elif element.name in ['p', 'div', 'article', 'section', 'main']:
             text = element.get_text(separator=' ', strip=True)
             if text:
                 current_section.append(text)
