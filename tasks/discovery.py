@@ -111,6 +111,12 @@ def discover_urls(domain: str) -> List[str]:
     except requests.RequestException as e:
         raise ConnectionError(f"Failed to reach {domain}: {str(e)}")
 
+def _normalize_domain(domain: str) -> str:
+    """Normalize domain for comparison (remove www, lowercase)."""
+    domain = domain.lower()
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    return domain
 
 def _is_valid_url(url: str, expected_netloc: str) -> bool:
     """Validate that URL is usable."""
@@ -128,7 +134,8 @@ def _is_valid_url(url: str, expected_netloc: str) -> bool:
             return False
         
         parsed = urlparse(url)
-        
+        if _normalize_domain(parsed.netloc) != _normalize_domain(expected_netloc):
+            return False
         # Must be http/https
         if parsed.scheme not in ('http', 'https'):
             return False

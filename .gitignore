@@ -31,6 +31,9 @@ venv.bak/
 # Project Specific
 screenshots/
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 .env

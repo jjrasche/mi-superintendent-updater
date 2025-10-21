@@ -5,84 +5,37 @@ from utils.llm import build_extraction_prompt, call_llm
 from utils.debug_logger import get_logger
 
 def extract_superintendent(html: str, district_name: str, url: str) -> Dict:
-    """
-    Extract superintendent info from HTML using LLM.
-    
-    Args:
-        html: Raw HTML
-        district_name: District name for context
-        url: Source URL (for logging)
-    
-    Returns:
-        {
-            'name': str | None,
-            'title': str | None,
-            'email': str | None,
-            'phone': str | None,
-            'extracted_text': str,
-            'llm_reasoning': str,
-            'is_empty': bool
-        }
-    """
+    """Extract superintendent info from HTML using LLM."""
     logger = get_logger()
     
     # Parse HTML to clean text
     cleaned_text = parse_html_to_text(html)
     
-    # Validation: If text is too short, return empty immediately
+    # Quick validation: empty content
     if len(cleaned_text.strip()) < 50:
-        empty_result = {
-            'name': None,
-            'title': None,
-            'email': None,
-            'phone': None,
-            'extracted_text': cleaned_text,
-            'llm_reasoning': 'Page content is empty or too short (less than 50 characters)',
-            'is_empty': True
-        }
-        
-        logger.log_page_fetch(
-            district_name=district_name,
-            url=url,
-            raw_html=html,
-            parsed_text=cleaned_text,
-            extraction_result=empty_result
+        return _empty_result(
+            cleaned_text, 
+            'Page content too short (less than 50 characters)',
+            logger, district_name, url, html
         )
-        
-        return empty_result
     
-    # Build prompts
+    # Build prompts and call LLM
     system_prompt, user_prompt = build_extraction_prompt(cleaned_text, district_name)
     
-    # Call LLM
     try:
         result = call_llm(system_prompt, user_prompt)
         
-        # Validation: Check for invalid extractions
-        is_empty = result.get('is_empty', False)
-        name = result.get('name')
-        title = result.get('title')
-        
-        # Force is_empty if name found but title doesn't contain "superintendent"
-        if name and title and not is_empty:
-            title_lower = title.lower()
+        # Post-validation: title must contain "superintendent"
+        if not result.get('is_empty') and result.get('title'):
+            title_lower = result['title'].lower()
             if 'superintendent' not in title_lower:
-                result['name'] = None
-                result['title'] = None
-                result['email'] = None
-                result['phone'] = None
-                result['is_empty'] = True
-                result['reasoning'] = f"Found '{title}' but title does not contain 'Superintendent'. Setting to empty."
+                result = _empty_result(
+                    cleaned_text,
+                    f"Title '{result['title']}' does not contain 'Superintendent'",
+                    logger, district_name, url, html
+                )
         
-        # Force is_empty if we have a name but empty text (hallucination)
-        if name and len(cleaned_text.strip()) < 100 and not is_empty:
-            result['name'] = None
-            result['title'] = None
-            result['email'] = None
-            result['phone'] = None
-            result['is_empty'] = True
-            result['reasoning'] = "Detected potential hallucination: name found but text is too short. Setting to empty."
-        
+        # Log and return
         extraction_result = {
             'name': result.get('name'),
             'title': result.get('title'),
@@ -93,36 +46,27 @@ def extract_superintendent(html: str, district_name: str, url: str) -> Dict:
             'is_empty': result.get('is_empty', False)
         }
         
-        # Log everything for debugging
-        logger.log_page_fetch(
-            district_name=district_name,
-            url=url,
-            raw_html=html,
-            parsed_text=cleaned_text,
-            extraction_result=extraction_result
-        )
-        
+        logger.log_page_fetch(district_name, url, html, cleaned_text, extraction_result)
         return extraction_result
         
     except Exception as e:
-        # If LLM fails, return error state
-        error_result = {
-            'name': None,
-            'title': None,
-            'email': None,
-            'phone': None,
-            'extracted_text': cleaned_text,
-            'llm_reasoning': f'LLM extraction failed: {str(e)}',
-            'is_empty': True
-        }
-        
-        # Still log the attempt
-        logger.log_page_fetch(
-            district_name=district_name,
-            url=url,
-            raw_html=html,
-            parsed_text=cleaned_text,
-            extraction_result=error_result
+        return _empty_result(
+            cleaned_text,
+            f'LLM extraction failed: {str(e)}',
+            logger, district_name, url, html
         )
-        
-        return error_result
+
+
+def _empty_result(text: str, reason: str, logger, district_name: str, url: str, html: str) -> Dict:
+    """Helper to create empty result"""
+    result = {
+        'name': None,
+        'title': None,
+        'email': None,
+        'phone': None,
+        'extracted_text': text,
+        'llm_reasoning': reason,
+        'is_empty': True
+    }
+    logger.log_page_fetch(district_name, url, html, text, result)
+    return result

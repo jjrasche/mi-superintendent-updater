@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup, NavigableString, Tag
 from config import MAX_TEXT_LENGTH
 
-
+""" Recommendation: Consider using a library like trafilatura or readability-lxml for cleaner extraction."""
 def parse_html_to_text(html: str) -> str:
     """
     Convert raw HTML to structured text for LLM.

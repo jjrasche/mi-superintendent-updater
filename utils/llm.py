@@ -6,8 +6,16 @@ from config import GROQ_API_KEY, GROQ_MODEL, GROQ_TEMPERATURE
 
 
 # Initialize Groq client
-client = Groq(api_key=GROQ_API_KEY)
+_client = None
 
+def get_client():
+    """Get or create Groq client (lazy initialization)."""
+    global _client
+    if _client is None:
+        if not GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY environment variable must be set")
+        _client = Groq(api_key=GROQ_API_KEY)
+    return _client
 
 def build_extraction_prompt(cleaned_text: str, district_name: str) -> tuple[str, str]:
     """
@@ -20,75 +28,76 @@ def build_extraction_prompt(cleaned_text: str, district_name: str) -> tuple[str,
     Returns:
         (system_prompt, user_prompt)
     """
-    system_prompt = """You are an expert at extracting superintendent contact information from school district webpages.
+    system_prompt = """You are a data extraction specialist. Extract superintendent contact information from school district webpages.
 
-Your task is to find the SUPERINTENDENT ONLY - not assistant superintendents, principals, directors, coordinators, or other staff.
-
-Extract the following fields:
-- name: Full name of the superintendent (e.g., "Dr. Jane Smith")
-- title: Official title (e.g., "Superintendent of Schools")
-- email: Email address (look for "Email: address@domain.com" format or mailto links)
-- phone: Phone number (look for "Phone: (123) 456-7890" format or tel links)
-
-Return a JSON object with this exact structure:
+OUTPUT FORMAT:
+Return valid JSON with this exact structure:
 {
     "name": "string or null",
-    "title": "string or null", 
+    "title": "string or null",
     "email": "string or null",
     "phone": "string or null",
-    "reasoning": "Brief explanation of what you found or why nothing was found",
+    "reasoning": "brief explanation",
     "is_empty": false
 }
 
-Set is_empty to true if NO superintendent information is found on the page.
+EXTRACTION RULES (in priority order):
 
-CRITICAL RULES - FOLLOW THESE EXACTLY:
-1. **EMPTY TEXT CHECK**: If the page content is empty or nearly empty (less than 50 characters), you MUST set is_empty=true and all fields to null. NEVER fabricate data from empty text.
+1. SUPERINTENDENT ONLY
+   - Title MUST explicitly contain the word "Superintendent"
+   - DO NOT extract: Assistant Superintendent, Director, Principal, Coordinator, or any other role
+   - Exception: If ONLY Assistant Superintendent is listed, extract them and note in reasoning
 
-2. **TITLE VERIFICATION**: The person's title MUST explicitly contain the word "Superintendent" (case-insensitive). DO NOT extract:
-   - Directors (e.g., "Director of Elementary Education")
-   - Assistant Superintendents (unless that's the only superintendent listed)
-   - Principals, Coordinators, Supervisors, or other administrators
-   - Anyone whose title does NOT say "Superintendent"
+2. EXPLICIT DATA ONLY
+   - Extract ONLY information directly stated on the page
+   - Look for patterns like "Email: address@domain.com" or mailto: links
+   - Look for patterns like "Phone: (123) 456-7890" or tel: links
+   - NEVER infer, guess, or construct data not shown
 
-3. **NO FABRICATION**: ONLY extract information that is EXPLICITLY stated on the page
-   - NEVER make up, infer, or guess information that is not present
-   - If a field is not found, set it to null - DO NOT fabricate data
-   - DO NOT create email addresses (like "name@domain.com") that aren't shown
-   - DO NOT assume someone is the superintendent based on context alone
+3. EMPTY CONTENT HANDLING
+   - If page content is empty or under 50 characters → set is_empty=true, all fields null
+   - If no superintendent information found → set is_empty=true, all fields null
+   - If person found but title lacks "Superintendent" → set is_empty=true, all fields null
 
-4. **EXACT MATCHES ONLY**: 
-   - Extract emails exactly as shown (from "Email: ..." format or mailto: links)
-   - Extract phone numbers exactly as shown (from "Phone: ..." format or tel: links)
-   - If contact info isn't explicitly shown, set fields to null
+4. FIELD REQUIREMENTS
+   - name: Required if superintendent found
+   - title: Required if superintendent found (must contain "Superintendent")
+   - email: Optional - only if explicitly shown
+   - phone: Optional - only if explicitly shown
 
-5. **ONE SUPERINTENDENT ONLY**: If multiple people are listed, choose ONLY the person with "Superintendent" (not "Assistant Superintendent") in their title. If only assistant superintendents are listed, you may extract the highest-ranking one but note this in reasoning.
+EXAMPLES:
 
-6. **VERIFICATION**: When in doubt, set the field to null - it's better to miss data than to fabricate it.
+✓ CORRECT:
+Input: "Superintendent Dr. Jane Smith | Email: jsmith@district.edu | Phone: (555) 123-4567"
+Output: {"name": "Dr. Jane Smith", "title": "Superintendent", "email": "jsmith@district.edu", 
+         "phone": "(555) 123-4567", "reasoning": "Found superintendent with complete contact info", "is_empty": false}
 
-EXAMPLES OF CORRECT BEHAVIOR:
-✓ CORRECT: "Superintendent Phil Jankowski (Email: pjankowski@district.edu)" 
-   → Extract: name="Phil Jankowski", title="Superintendent", email="pjankowski@district.edu"
+✓ CORRECT:
+Input: "Superintendent Phil Jankowski [mailto link: pjankowski@abs.misd.net]"
+Output: {"name": "Phil Jankowski", "title": "Superintendent", "email": "pjankowski@abs.misd.net",
+         "phone": null, "reasoning": "Found superintendent with email from mailto link", "is_empty": false}
 
-✓ CORRECT: "Superintendent Phil Jankowski" but no email shown
-   → Extract: name="Phil Jankowski", title="Superintendent", email=null
+✓ CORRECT:
+Input: "Director of Elementary Education: Sarah Johnson"
+Output: {"name": null, "title": null, "email": null, "phone": null,
+         "reasoning": "Found Director role, not Superintendent", "is_empty": true}
 
-✓ CORRECT: Empty or very short page content
-   → Return: all fields null, is_empty=true, reasoning="Page content is empty"
+✗ WRONG:
+Input: "Superintendent John Doe serves our district"
+Output: {"name": "John Doe", "title": "Superintendent", "email": "jdoe@district.edu", ...}
+Reason: NEVER create email addresses that aren't explicitly shown
 
-✓ CORRECT: Only "Director of Elementary Education Heidi Stephenson" shown
-   → Return: all fields null, is_empty=true, reasoning="No superintendent found, only Director of Elementary Education"
-
-✗ WRONG: Making up "pjankowski@district.edu" when email isn't shown
-✗ WRONG: Extracting "Director of Elementary Education" as superintendent
-✗ WRONG: Returning a name when page content is empty"""
+✗ WRONG:  
+Input: "Assistant Superintendent Mary Brown oversees curriculum"
+Output: {"name": "Mary Brown", "title": "Assistant Superintendent", ...}
+Reason: Only extract Assistant Superintendent if NO regular Superintendent is listed"""
 
     user_prompt = f"""District Name: {district_name}
 
 Page Content:
 {cleaned_text}
 
-Extract the superintendent's contact information from this page."""
+Extract the superintendent's contact information following the rules exactly."""
 
     return system_prompt, user_prompt
 
@@ -155,15 +164,20 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
         - Temperature: 0.1
         - Response format: JSON object
     """
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=GROQ_TEMPERATURE,
-        response_format={"type": "json_object"}
-    )
-    
-    content = response.choices[0].message.content
-    return json.loads(content)
+    try:
+        client = get_client()
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=GROQ_TEMPERATURE,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        print(f"[LLM ERROR] {type(e).__name__}: {str(e)}")
+        raise
