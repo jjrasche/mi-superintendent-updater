@@ -1,119 +1,101 @@
-# models/database.py
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
-from config import DATABASE_URL
+from typing import Optional, List
 
-Base = declarative_base()
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+from sqlalchemy import (
+    create_engine, String, Integer, DateTime, Boolean, Text, ForeignKey,
+    Index, UniqueConstraint
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+
+from config import DB_URL
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class District(Base):
-    """The school district we're tracking"""
-    __tablename__ = "districts"
+    """School district to monitor"""
+    __tablename__ = 'districts'
     
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
-    domain = Column(String, nullable=False)
-    home_page = Column(String, nullable=False)
-    state = Column(String, default="MI")
-    
-    # Current superintendent info (denormalized for quick access)
-    saveCandidatesuperintendent_name = Column(String)
-    current_superintendent_email = Column(String)
-    current_superintendent_phone = Column(String)
-    current_superintendent_title = Column(String)
-    # CRM source
-    crm_superintendent_name = Column(String)
-    crm_superintendent_email = Column(String)
-    crm_superintendent_phone = Column(String)
-    crm_superintendent_title = Column(String)
-    crm_last_updated = Column(DateTime)
-    
-    last_checked = Column(DateTime)
-    # Relationships
-    discovery_runs = relationship("DiscoveryRun", back_populates="district")
-    superintendent_history = relationship("SuperintendentHistory", back_populates="district")
-
-
-class DiscoveryRun(Base):
-    """Each time we run discovery for a district"""
-    __tablename__ = "discovery_runs"
-    
-    id = Column(Integer, primary_key=True)
-    district_id = Column(Integer, ForeignKey("districts.id"), nullable=False)
-    
-    started_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime)
-    status = Column(String, default="running")  # running, completed, failed
-    
-    candidates_found = Column(Integer)
-    pages_fetched = Column(Integer)
-    extraction_successful = Column(Integer)
-    
-    error_message = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    domain: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    state: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    district = relationship("District", back_populates="discovery_runs")
-    page_candidates = relationship("PageCandidate", back_populates="discovery_run")
+    fetched_pages: Mapped[List["FetchedPage"]] = relationship(
+        "FetchedPage", back_populates="district", cascade="all, delete-orphan"
+    )
+    
+    __table_args__ = (
+        Index('idx_district_last_checked', 'last_checked_at'),
+    )
+    
+    def __repr__(self):
+        return f"<District(id={self.id}, name='{self.name}', domain='{self.domain}')>"
 
 
-class PageCandidate(Base):
-    """Each URL we discover and fetch"""
-    __tablename__ = "page_candidates"
+class FetchedPage(Base):
+    """A webpage we retrieved and analyzed"""
+    __tablename__ = 'fetched_pages'
     
-    id = Column(Integer, primary_key=True)
-    discovery_run_id = Column(Integer, ForeignKey("discovery_runs.id"), nullable=False)
-    
-    url = Column(String, nullable=False)
-    html = Column(Text)
-    title = Column(String)
-    discovery_rank = Column(Integer)  # 1-5 from LLM ranking
-    discovery_score = Column(Float)   # Confidence in URL being relevant
-    status = Column(String, default="pending")  # pending, fetched, error
-    
-    # Fetch results
-    fetched_at = Column(DateTime)
-    html_length = Column(Integer)
-    screenshot_path = Column(String)
-    fetch_method = Column(String)  # "http" or "playwright"
-    
-    # Extraction results
-    extracted_at = Column(DateTime)
-    extraction_name = Column(String)
-    extraction_title = Column(String)
-    extraction_email = Column(String)
-    extraction_phone = Column(String)
-    extraction_confidence = Column(Float)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    district_id: Mapped[int] = mapped_column(Integer, ForeignKey('districts.id'), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)  # "discovery" or "monitoring"
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # "success", "error", "timeout"
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
-    discovery_run = relationship("DiscoveryRun", back_populates="page_candidates")
+    district: Mapped["District"] = relationship("District", back_populates="fetched_pages")
+    extraction: Mapped[Optional["Extraction"]] = relationship(
+        "Extraction", back_populates="fetched_page", uselist=False, cascade="all, delete-orphan"
+    )
+    
+    __table_args__ = (
+        Index('idx_fetched_page_district_date', 'district_id', 'fetched_at'),
+        Index('idx_fetched_page_mode', 'mode'),
+    )
+    
+    def __repr__(self):
+        return f"<FetchedPage(id={self.id}, url='{self.url[:50]}...', status='{self.status}')>"
 
 
-class SuperintendentHistory(Base):
-    """Track superintendent changes over time"""
-    __tablename__ = "superintendent_history"
+class Extraction(Base):
+    """Superintendent info extracted from a page"""
+    __tablename__ = 'extractions'
     
-    id = Column(Integer, primary_key=True)
-    district_id = Column(Integer, ForeignKey("districts.id"), nullable=False)
-    
-    name = Column(String)
-    title = Column(String)
-    email = Column(String)
-    phone = Column(String)
-    
-    source_url = Column(String)
-    discovered_at = Column(DateTime, default=datetime.utcnow)
-    confidence = Column(Float)
-    
-    # Track if this is still current
-    is_current = Column(Integer, default=1)  # 1 = current, 0 = past
-    replaced_at = Column(DateTime)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fetched_page_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('fetched_pages.id'), nullable=False, unique=True
+    )
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    llm_reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_empty: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    extracted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
-    district = relationship("District", back_populates="superintendent_history")
+    fetched_page: Mapped["FetchedPage"] = relationship("FetchedPage", back_populates="extraction")
+    
+    __table_args__ = (
+        Index('idx_extraction_name', 'name'),
+    )
+    
+    def __repr__(self):
+        return f"<Extraction(id={self.id}, name='{self.name}', is_empty={self.is_empty})>"
+
+
+# Database engine and session factory
+engine = create_engine(DB_URL, echo=False)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init_db():
@@ -122,5 +104,5 @@ def init_db():
 
 
 def get_session():
-    """Get a database session"""
+    """Get a new database session"""
     return SessionLocal()

@@ -1,9 +1,16 @@
-﻿prefect>=2.14.0
-playwright>=1.40.0
-beautifulsoup4>=4.12.0
-requests>=2.31.0
-lxml>=4.9.0
-trafilatura>=1.6.0
-groq>=0.4.0
+﻿# Database
 sqlalchemy>=2.0.0
-black>=23.1.0
+psycopg2-binary>=2.9.0  # For PostgreSQL (optional)
+
+# HTTP and Web Scraping
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0  # XML parser for BeautifulSoup
+playwright>=1.40.0
+
+# LLM
+groq>=0.4.0
+tenacity>=8.2.0
+
+# Utilities
+python-dotenv>=1.0.0  # For loading .env files
