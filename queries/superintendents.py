@@ -430,3 +430,113 @@ def get_failed_fetches(days: int = 7) -> List[Dict]:
         return failures
     finally:
         session.close()
+
+
+def get_url_pool(district_id: int) -> List[str]:
+    """
+    Get pool of valid URLs for a district.
+    
+    A URL is valid if it has had at least one successful extraction
+    (is_empty=False) in its last 3 fetch attempts.
+    
+    Args:
+        district_id: District ID
+    
+    Returns:
+        List of unique URLs that are still viable for checking
+        
+    Process:
+        1. Get all unique URLs for this district
+        2. For each URL, check last 3 FetchedPages
+        3. If any of those 3 had successful extraction, include URL
+        4. Return deduplicated list
+    """
+    session = get_session()
+    
+    try:
+        # Get all unique URLs for this district
+        unique_urls = (
+            session.query(FetchedPage.url)
+            .filter(FetchedPage.district_id == district_id)
+            .distinct()
+            .all()
+        )
+        
+        valid_urls = []
+        
+        for (url,) in unique_urls:
+            # Get last 3 fetches for this specific URL
+            recent_fetches = (
+                session.query(FetchedPage, Extraction)
+                .outerjoin(Extraction)
+                .filter(
+                    FetchedPage.district_id == district_id,
+                    FetchedPage.url == url,
+                    FetchedPage.status == 'success'
+                )
+                .order_by(desc(FetchedPage.fetched_at))
+                .limit(3)
+                .all()
+            )
+            
+            # Check if any of the last 3 had a successful extraction
+            has_success = False
+            for fetched_page, extraction in recent_fetches:
+                if extraction and not extraction.is_empty:
+                    has_success = True
+                    break
+            
+            if has_success:
+                valid_urls.append(url)
+        
+        return valid_urls
+        
+    finally:
+        session.close()
+
+
+def get_districts_needing_check(days: int = 7) -> List[int]:
+    """
+    Get districts that need checking (either discovery or monitoring).
+    
+    Returns districts that haven't had a successful extraction
+    (is_empty=False) in the last N days.
+    
+    Args:
+        days: Number of days threshold
+    
+    Returns:
+        List of district IDs that need checking
+    """
+    session = get_session()
+    
+    try:
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Get all districts
+        all_districts = session.query(District.id).all()
+        
+        districts_needing_check = []
+        
+        for (district_id,) in all_districts:
+            # Check if this district has any successful extraction in timeframe
+            recent_success = (
+                session.query(Extraction.id)
+                .join(FetchedPage)
+                .filter(
+                    FetchedPage.district_id == district_id,
+                    FetchedPage.fetched_at >= cutoff_date,
+                    FetchedPage.status == 'success',
+                    Extraction.is_empty == False
+                )
+                .first()
+            )
+            
+            # If no recent success, needs checking
+            if not recent_success:
+                districts_needing_check.append(district_id)
+        
+        return districts_needing_check
+        
+    finally:
+        session.close()
