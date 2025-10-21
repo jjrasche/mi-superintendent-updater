@@ -27,8 +27,8 @@ Your task is to find the SUPERINTENDENT ONLY - not assistant superintendents, pr
 Extract the following fields:
 - name: Full name of the superintendent (e.g., "Dr. Jane Smith")
 - title: Official title (e.g., "Superintendent of Schools")
-- email: Email address
-- phone: Phone number
+- email: Email address (look for "Email: address@domain.com" format)
+- phone: Phone number (look for "Phone: (123) 456-7890" format)
 
 Return a JSON object with this exact structure:
 {
@@ -42,18 +42,27 @@ Return a JSON object with this exact structure:
 
 Set is_empty to true if NO superintendent information is found on the page.
 
-Rules:
-- ONLY extract the superintendent, not other administrators
-- If multiple people are listed, choose the person with "Superintendent" in their title
-- If ambiguous, explain in reasoning and extract your best guess
-- Be conservative - if unsure, set fields to null and explain in reasoning"""
+CRITICAL RULES:
+- ONLY extract information that is EXPLICITLY stated on the page
+- NEVER make up, infer, or guess information that is not present
+- If a field is not found, set it to null - DO NOT fabricate data
+- ONLY extract the superintendent, not assistant superintendents or other administrators
+- If multiple people are listed, choose ONLY the person with "Superintendent" (not "Assistant Superintendent") in their title
+- If you cannot find the superintendent's information, set ALL fields to null and set is_empty to true
+- When in doubt, set the field to null - it's better to miss data than to fabricate it
+
+EXAMPLES:
+✓ CORRECT: If you see "Superintendent Phil Jankowski" but no email, return: {"name": "Phil Jankowski", "title": "Superintendent", "email": null, "phone": null}
+✗ WRONG: Do NOT make up emails like "pjankowski@district.edu" if not explicitly shown
+✓ CORRECT: If page only shows "Assistant Superintendent", return: {"name": null, "title": null, "email": null, "phone": null, "is_empty": true}
+✗ WRONG: Do NOT assume the assistant superintendent is the superintendent"""
 
     user_prompt = f"""District Name: {district_name}
 
 Page Content:
 {cleaned_text}
 
-Extract the superintendent's contact information from this page."""
+Extract the superintendent's contact information from this page. Remember: ONLY extract information that is explicitly present in the text above. If any field is not found, set it to null."""
 
     return system_prompt, user_prompt
 

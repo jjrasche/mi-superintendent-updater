@@ -45,6 +45,31 @@ def parse_html_to_text(html: str) -> str:
         if not isinstance(element, Tag):
             return
         
+        # Handle links - CRITICAL for email/phone extraction
+        if element.name == 'a':
+            href = element.get('href', '')
+            text = element.get_text(strip=True)
+            
+            # Extract email from mailto links
+            if href.startswith('mailto:'):
+                email = href.replace('mailto:', '').strip()
+                # Include both the name and explicit email
+                if text and text.lower() != email.lower():
+                    current_section.append(f"{text} (Email: {email})")
+                else:
+                    current_section.append(f"Email: {email}")
+            # Extract phone from tel links
+            elif href.startswith('tel:'):
+                phone = href.replace('tel:', '').strip()
+                if text:
+                    current_section.append(f"{text} (Phone: {phone})")
+                else:
+                    current_section.append(f"Phone: {phone}")
+            # Regular links - just keep the text
+            elif text:
+                current_section.append(text)
+            return  # Don't process children, we already got the text
+        
         # Handle headings
         if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
             text = element.get_text(strip=True)
@@ -57,9 +82,13 @@ def parse_html_to_text(html: str) -> str:
         
         # Handle paragraphs and divs
         elif element.name in ['p', 'div', 'article', 'section', 'main']:
-            text = element.get_text(separator=' ', strip=True)
-            if text:
-                current_section.append(text)
+            # Process children recursively instead of getting all text at once
+            for child in element.children:
+                process_element(child, depth + 1)
+            # Add spacing after paragraph-like elements
+            if element.name in ['p', 'article', 'section']:
+                if current_section and current_section[-1] != '':
+                    current_section.append('')
         
         # Handle lists
         elif element.name == 'ul' or element.name == 'ol':

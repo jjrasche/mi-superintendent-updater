@@ -17,7 +17,8 @@ def main():
     
     # Run bulk check
     print(f"\nStarting bulk check...\n")
-    results = run_bulk_check([i for i in range(11, 22)])
+    # results = run_bulk_check([i for i in range(11, 22)])
+    results = run_bulk_check([16])
     
     # Summary
     print("\n" + "=" * 60)
