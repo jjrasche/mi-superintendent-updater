@@ -1,4 +1,5 @@
 
+from database import init_db
 from queries.superintendents import get_districts_needing_check
 from workflows.run import run_bulk_check
 
@@ -53,7 +54,7 @@ def main(days: int = 7):
 
 if __name__ == "__main__":
     import sys
-    
-    # Allow passing days as command line argument
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else 7
-    main(days=days)
+    init_db()
+    # # Allow passing days as command line argument
+    # days = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+    # main(days=days)
