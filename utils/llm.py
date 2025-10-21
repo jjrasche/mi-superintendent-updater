@@ -22,13 +22,13 @@ def build_extraction_prompt(cleaned_text: str, district_name: str) -> tuple[str,
     """
     system_prompt = """You are an expert at extracting superintendent contact information from school district webpages.
 
-Your task is to find the SUPERINTENDENT ONLY - not assistant superintendents, principals, or other staff.
+Your task is to find the SUPERINTENDENT ONLY - not assistant superintendents, principals, directors, coordinators, or other staff.
 
 Extract the following fields:
 - name: Full name of the superintendent (e.g., "Dr. Jane Smith")
 - title: Official title (e.g., "Superintendent of Schools")
-- email: Email address (look for "Email: address@domain.com" format)
-- phone: Phone number (look for "Phone: (123) 456-7890" format)
+- email: Email address (look for "Email: address@domain.com" format or mailto links)
+- phone: Phone number (look for "Phone: (123) 456-7890" format or tel links)
 
 Return a JSON object with this exact structure:
 {
@@ -42,27 +42,53 @@ Return a JSON object with this exact structure:
 
 Set is_empty to true if NO superintendent information is found on the page.
 
-CRITICAL RULES:
-- ONLY extract information that is EXPLICITLY stated on the page
-- NEVER make up, infer, or guess information that is not present
-- If a field is not found, set it to null - DO NOT fabricate data
-- ONLY extract the superintendent, not assistant superintendents or other administrators
-- If multiple people are listed, choose ONLY the person with "Superintendent" (not "Assistant Superintendent") in their title
-- If you cannot find the superintendent's information, set ALL fields to null and set is_empty to true
-- When in doubt, set the field to null - it's better to miss data than to fabricate it
+CRITICAL RULES - FOLLOW THESE EXACTLY:
+1. **EMPTY TEXT CHECK**: If the page content is empty or nearly empty (less than 50 characters), you MUST set is_empty=true and all fields to null. NEVER fabricate data from empty text.
 
-EXAMPLES:
-✓ CORRECT: If you see "Superintendent Phil Jankowski" but no email, return: {"name": "Phil Jankowski", "title": "Superintendent", "email": null, "phone": null}
-✗ WRONG: Do NOT make up emails like "pjankowski@district.edu" if not explicitly shown
-✓ CORRECT: If page only shows "Assistant Superintendent", return: {"name": null, "title": null, "email": null, "phone": null, "is_empty": true}
-✗ WRONG: Do NOT assume the assistant superintendent is the superintendent"""
+2. **TITLE VERIFICATION**: The person's title MUST explicitly contain the word "Superintendent" (case-insensitive). DO NOT extract:
+   - Directors (e.g., "Director of Elementary Education")
+   - Assistant Superintendents (unless that's the only superintendent listed)
+   - Principals, Coordinators, Supervisors, or other administrators
+   - Anyone whose title does NOT say "Superintendent"
+
+3. **NO FABRICATION**: ONLY extract information that is EXPLICITLY stated on the page
+   - NEVER make up, infer, or guess information that is not present
+   - If a field is not found, set it to null - DO NOT fabricate data
+   - DO NOT create email addresses (like "name@domain.com") that aren't shown
+   - DO NOT assume someone is the superintendent based on context alone
+
+4. **EXACT MATCHES ONLY**: 
+   - Extract emails exactly as shown (from "Email: ..." format or mailto: links)
+   - Extract phone numbers exactly as shown (from "Phone: ..." format or tel: links)
+   - If contact info isn't explicitly shown, set fields to null
+
+5. **ONE SUPERINTENDENT ONLY**: If multiple people are listed, choose ONLY the person with "Superintendent" (not "Assistant Superintendent") in their title. If only assistant superintendents are listed, you may extract the highest-ranking one but note this in reasoning.
+
+6. **VERIFICATION**: When in doubt, set the field to null - it's better to miss data than to fabricate it.
+
+EXAMPLES OF CORRECT BEHAVIOR:
+✓ CORRECT: "Superintendent Phil Jankowski (Email: pjankowski@district.edu)" 
+   → Extract: name="Phil Jankowski", title="Superintendent", email="pjankowski@district.edu"
+
+✓ CORRECT: "Superintendent Phil Jankowski" but no email shown
+   → Extract: name="Phil Jankowski", title="Superintendent", email=null
+
+✓ CORRECT: Empty or very short page content
+   → Return: all fields null, is_empty=true, reasoning="Page content is empty"
+
+✓ CORRECT: Only "Director of Elementary Education Heidi Stephenson" shown
+   → Return: all fields null, is_empty=true, reasoning="No superintendent found, only Director of Elementary Education"
+
+✗ WRONG: Making up "pjankowski@district.edu" when email isn't shown
+✗ WRONG: Extracting "Director of Elementary Education" as superintendent
+✗ WRONG: Returning a name when page content is empty"""
 
     user_prompt = f"""District Name: {district_name}
 
 Page Content:
 {cleaned_text}
 
-Extract the superintendent's contact information from this page. Remember: ONLY extract information that is explicitly present in the text above. If any field is not found, set it to null."""
+Extract the superintendent's contact information from this page."""
 
     return system_prompt, user_prompt
 

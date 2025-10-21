@@ -72,13 +72,46 @@ def parse_html_to_text(html: str) -> str:
         
         # Handle headings
         if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            text = element.get_text(strip=True)
-            if text:
-                # Start new section if we have content
-                if current_section:
-                    sections.append(' '.join(current_section))
-                    current_section.clear()
-                current_section.append(f"## {text}")
+            # Start new section if we have content
+            if current_section:
+                sections.append(' '.join(current_section))
+                current_section.clear()
+            
+            # Process heading content recursively to catch mailto links
+            heading_parts = []
+            for child in element.children:
+                if isinstance(child, NavigableString):
+                    text = str(child).strip()
+                    if text:
+                        heading_parts.append(text)
+                elif isinstance(child, Tag):
+                    if child.name == 'a':
+                        href = child.get('href', '')
+                        text = child.get_text(strip=True)
+                        
+                        if href.startswith('mailto:'):
+                            email = href.replace('mailto:', '').strip()
+                            if text and text.lower() != email.lower():
+                                heading_parts.append(f"{text} (Email: {email})")
+                            else:
+                                heading_parts.append(f"Email: {email}")
+                        elif href.startswith('tel:'):
+                            phone = href.replace('tel:', '').strip()
+                            if text:
+                                heading_parts.append(f"{text} (Phone: {phone})")
+                            else:
+                                heading_parts.append(f"Phone: {phone}")
+                        elif text:
+                            heading_parts.append(text)
+                    elif child.name == 'br':
+                        heading_parts.append(' ')
+                    else:
+                        text = child.get_text(strip=True)
+                        if text:
+                            heading_parts.append(text)
+            
+            if heading_parts:
+                current_section.append(f"## {' '.join(heading_parts)}")
         
         # Handle paragraphs and divs
         elif element.name in ['p', 'div', 'article', 'section', 'main']:
