@@ -7,8 +7,8 @@ DB_URL = os.getenv('DATABASE_URL', 'sqlite:///superintendents.db')
 
 # Groq API
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY environment variable must be set")
+# if not GROQ_API_KEY:
+#     raise ValueError("GROQ_API_KEY environment variable must be set")
 GROQ_MODEL = 'llama-3.1-8b-instant'
 GROQ_TEMPERATURE = 0.1
 

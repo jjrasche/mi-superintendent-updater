@@ -182,7 +182,7 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
         print(f"[LLM ERROR] {type(e).__name__}: {str(e)}")
         raise
 
-def build_link_identification_prompt(links: List[Dict], district_name: str = None) -> tuple[str, str]:
+def build_link_identification_prompt(links: list[dict], district_name: str = None) -> tuple[str, str]:
     """
     Build prompt to identify the Budget/Salary Transparency link.
     
