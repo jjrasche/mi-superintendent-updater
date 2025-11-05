@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-import requests
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 from config import USER_AGENT, REQUEST_TIMEOUT
 from utils.llm import build_link_identification_prompt, call_llm
@@ -9,7 +9,7 @@ from utils.llm import build_link_identification_prompt, call_llm
 
 def find_transparency_link(domain: str, district_name: str = None) -> Dict:
     """
-    Find Budget/Salary Transparency link on district homepage.
+    Find Budget/Salary Transparency link on district homepage using Playwright.
     
     Args:
         domain: District domain (e.g., "exampledistrict.edu")
@@ -26,20 +26,26 @@ def find_transparency_link(domain: str, district_name: str = None) -> Dict:
     if not domain.startswith(('http://', 'https://')):
         domain = f'https://{domain}'
     
-    print(f"\n[TRANSPARENCY DISCOVERY] Searching homepage: {domain}")
+    print(f"\n[TRANSPARENCY DISCOVERY] Searching homepage with Playwright: {domain}")
     
     try:
-        # Fetch homepage
-        response = requests.get(
-            domain, 
-            headers={'User-Agent': USER_AGENT},
-            timeout=REQUEST_TIMEOUT,
-            verify=False
-        )
-        response.raise_for_status()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=USER_AGENT,
+                ignore_https_errors=True
+            )
+            page = context.new_page()
+            
+            # Navigate and wait for network to be idle
+            page.goto(domain, timeout=REQUEST_TIMEOUT * 1000, wait_until='networkidle')
+            
+            # Get the rendered HTML
+            html = page.content()
+            browser.close()
         
-        # Extract all links
-        links = _extract_links_from_homepage(response.text, domain)
+        # Extract all links from rendered HTML
+        links = _extract_links_from_homepage(html, domain)
         print(f"[TRANSPARENCY DISCOVERY] Found {len(links)} links on homepage")
         
         if not links:
@@ -63,7 +69,14 @@ def find_transparency_link(domain: str, district_name: str = None) -> Dict:
             'all_links': links
         }
         
-    except requests.RequestException as e:
+    except PlaywrightTimeout:
+        print(f"[TRANSPARENCY DISCOVERY] Timeout loading homepage")
+        return {
+            'url': None,
+            'reasoning': f'Timeout loading homepage after {REQUEST_TIMEOUT}s',
+            'all_links': []
+        }
+    except Exception as e:
         print(f"[TRANSPARENCY DISCOVERY] Failed to fetch homepage: {str(e)}")
         return {
             'url': None,

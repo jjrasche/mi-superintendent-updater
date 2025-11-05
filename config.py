@@ -20,7 +20,7 @@ USER_AGENT = 'Mozilla/5.0 (compatible; SuperintendentScraper/1.0)'
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # HTML Parsing
-MAX_TEXT_LENGTH = 4000  # chars for LLM context
+MAX_TEXT_LENGTH = 15000  # Increased to capture more content for complex pages
 
 # Discovery
 MAX_URLS_TO_FILTER = 10  # Top N URLs after LLM filtering

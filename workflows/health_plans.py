@@ -1,12 +1,84 @@
 from typing import Dict, List
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 from models.database import get_session, District
 from tasks.health_plan_discovery import find_transparency_link
 from tasks.health_plan_extraction import extract_health_plans
-from tasks.fetcher import fetch_page
 from utils.html_parser import parse_html_to_text
 from utils.pdf_parser import extract_text_from_pdf
 from utils.debug_logger import get_logger
+from config import USER_AGENT, REQUEST_TIMEOUT
+
+
+def _fetch_transparency_page_with_playwright(url: str) -> Dict:
+    """
+    Fetch transparency page using Playwright to handle JavaScript-rendered content.
+    
+    Args:
+        url: URL to fetch
+    
+    Returns:
+        {
+            'url': str,
+            'html': str,
+            'content_type': str,
+            'status': str,
+            'error_message': str | None
+        }
+    """
+    print(f"[FETCH] Using Playwright for: {url}")
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=USER_AGENT,
+                ignore_https_errors=True
+            )
+            page = context.new_page()
+            
+            # Navigate and wait for network to be idle (JavaScript loaded)
+            page.goto(url, timeout=REQUEST_TIMEOUT * 1000, wait_until='networkidle')
+            
+            # Additional wait for any lazy-loaded content
+            page.wait_for_timeout(2000)
+            
+            html = page.content()
+            browser.close()
+            
+            if html and len(html.strip()) > 100:
+                return {
+                    'url': url,
+                    'html': html,
+                    'content_type': 'html',
+                    'status': 'success',
+                    'error_message': None
+                }
+            else:
+                return {
+                    'url': url,
+                    'html': '',
+                    'content_type': 'html',
+                    'status': 'error',
+                    'error_message': 'Empty page content'
+                }
+                
+    except PlaywrightTimeout:
+        return {
+            'url': url,
+            'html': '',
+            'content_type': 'html',
+            'status': 'timeout',
+            'error_message': f'Page load timeout after {REQUEST_TIMEOUT}s'
+        }
+    except Exception as e:
+        return {
+            'url': url,
+            'html': '',
+            'content_type': 'html',
+            'status': 'error',
+            'error_message': str(e)
+        }
 
 
 def run_health_plan_check(district_id: int) -> Dict:
@@ -39,7 +111,7 @@ def run_health_plan_check(district_id: int) -> Dict:
         print(f"HEALTH PLAN CHECK: {district.name} ({district.domain})")
         print(f"{'='*60}")
         
-        # 2. Find transparency link on homepage
+        # 2. Find transparency link on homepage (using Playwright)
         print("\n[STEP 1] Finding transparency link...")
         transparency_result = find_transparency_link(district.domain, district.name)
         
@@ -66,9 +138,9 @@ def run_health_plan_check(district_id: int) -> Dict:
             transparency_result.get('reasoning')
         )
         
-        # 3. Fetch transparency page
-        print("\n[STEP 2] Fetching transparency page...")
-        fetch_result = fetch_page(transparency_url)
+        # 3. Fetch transparency page with Playwright
+        print("\n[STEP 2] Fetching transparency page with Playwright...")
+        fetch_result = _fetch_transparency_page_with_playwright(transparency_url)
         
         if fetch_result['status'] != 'success':
             print(f"✗ Failed to fetch: {fetch_result['error_message']}")
