@@ -181,3 +181,154 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
     except Exception as e:
         print(f"[LLM ERROR] {type(e).__name__}: {str(e)}")
         raise
+
+def build_link_identification_prompt(links: List[Dict], district_name: str = None) -> tuple[str, str]:
+    """
+    Build prompt to identify the Budget/Salary Transparency link.
+    
+    Args:
+        links: List of {'text': str, 'href': str} dicts
+        district_name: Optional district name for context
+    
+    Returns:
+        (system_prompt, user_prompt)
+    """
+    system_prompt = """You are an expert at identifying transparency and financial reporting links on school district websites.
+
+Michigan law requires school districts to post Budget & Salary/Compensation Transparency information on their website with a clearly visible link on the homepage.
+
+These links may be labeled:
+- "Budget Transparency"
+- "Salary Transparency"
+- "Budget & Salary Compensation Transparency"
+- "Financial Transparency"
+- "Transparency Reporting"
+- Or similar variations
+
+Your task is to identify which link from the provided list is most likely the Budget/Salary Transparency page.
+
+Return a JSON object:
+{
+    "url": "the full URL of the transparency page",
+    "reasoning": "Brief explanation of why you chose this link"
+}
+
+If no suitable link is found, return:
+{
+    "url": null,
+    "reasoning": "No transparency link found"
+}"""
+
+    links_list = "\n".join(
+        f"{i+1}. Text: \"{link['text']}\"\n   URL: {link['href']}"
+        for i, link in enumerate(links)
+    )
+    
+    user_prompt = f"""{"District: " + district_name if district_name else ""}
+
+Available links from homepage:
+{links_list}
+
+Identify the Budget/Salary Transparency link."""
+
+    return system_prompt, user_prompt
+
+
+def build_health_plan_extraction_prompt(text_content: str, district_name: str) -> tuple[str, str]:
+    """
+    Build prompt to extract health insurance plans.
+    
+    Args:
+        text_content: Parsed text from transparency page
+        district_name: District name for context
+    
+    Returns:
+        (system_prompt, user_prompt)
+    """
+    system_prompt = """You are a data extraction specialist for school district employee benefits information.
+
+Extract ALL employee health insurance plans from the provided text. This includes medical, dental, vision, disability, life insurance, and any other health-related benefit plans.
+
+OUTPUT FORMAT:
+Return valid JSON with this structure:
+{
+    "plans": [
+        {
+            "plan_name": "string",
+            "provider": "string",
+            "plan_type": "Medical|Dental|Vision|Disability|Life Insurance|Long-Term Care|Other",
+            "coverage_details": "string or null",
+            "is_empty": false
+        }
+    ],
+    "reasoning": "brief explanation of what was found"
+}
+
+EXTRACTION RULES:
+
+1. PLAN IDENTIFICATION
+   - Extract the official plan name if available (e.g., "MESSA ABC Plan", "Blue Cross Blue Shield PPO")
+   - If no formal name, construct from provider + type (e.g., "Priority Health Medical")
+
+2. PROVIDER IDENTIFICATION
+   - Common providers: MESSA, Blue Cross Blue Shield (BCBS), Priority Health, HAP, Aetna, UnitedHealthcare, MPSERS
+   - Extract exact provider name as stated
+
+3. PLAN TYPE
+   - Must be one of: Medical, Dental, Vision, Disability, Life Insurance, Long-Term Care, Other
+   - If text says "Health" or "Health Insurance", classify as "Medical"
+
+4. COVERAGE DETAILS (Optional)
+   - Include any mentioned: deductibles, copays, coverage percentages, network types (PPO, HMO)
+   - Keep brief - 1-2 sentences max
+
+5. EMPTY HANDLING
+   - If page has NO health plan information → return single plan with is_empty=true, all fields null
+   - If page has health plan section but it's empty/TBD → return single plan with is_empty=true
+   - Only mark individual plans as is_empty=true if that specific plan listing is incomplete
+
+6. MULTIPLE PLANS
+   - Extract ALL plans mentioned
+   - Include plans for different employee groups (teachers, administrators, support staff)
+   - Include all plan options even if employees can only choose one
+
+EXAMPLES:
+
+✓ CORRECT:
+Input: "Medical: MESSA ABC Plan | Dental: Delta Dental PPO | Vision: VSP"
+Output: {
+    "plans": [
+        {"plan_name": "MESSA ABC Plan", "provider": "MESSA", "plan_type": "Medical", "coverage_details": null, "is_empty": false},
+        {"plan_name": "Delta Dental PPO", "provider": "Delta Dental", "plan_type": "Dental", "coverage_details": "PPO network", "is_empty": false},
+        {"plan_name": "VSP", "provider": "VSP", "plan_type": "Vision", "coverage_details": null, "is_empty": false}
+    ],
+    "reasoning": "Found 3 health plans: medical, dental, and vision"
+}
+
+✓ CORRECT:
+Input: "Health Insurance: Blue Cross Blue Shield of Michigan, 80/20 cost share, $1000 deductible"
+Output: {
+    "plans": [
+        {"plan_name": "Blue Cross Blue Shield Medical", "provider": "Blue Cross Blue Shield", "plan_type": "Medical", 
+         "coverage_details": "80/20 cost share, $1000 deductible", "is_empty": false}
+    ],
+    "reasoning": "Found BCBS medical plan with cost sharing details"
+}
+
+✗ WRONG:
+Input: "Health benefits information coming soon"
+Output: {
+    "plans": [
+        {"plan_name": "TBD", "provider": "Unknown", "plan_type": "Medical", "coverage_details": null, "is_empty": false}
+    ]
+}
+Reason: Should mark as is_empty=true when no actual plan data exists"""
+
+    user_prompt = f"""District Name: {district_name}
+
+Transparency Page Content:
+{text_content}
+
+Extract all employee health insurance plans following the rules exactly."""
+
+    return system_prompt, user_prompt
