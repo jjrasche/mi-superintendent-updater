@@ -35,19 +35,11 @@ def find_transparency_link(domain: str) -> Optional[str]:
         
         # Extract all links
         links = _extract_links_from_homepage(response.text, domain)
-        print(f"[TRANSPARENCY DISCOVERY] Found {len(links)} links on homepage")
+        print(f"[TRANSPARENCY DISCOVERY] Found {len(links)} links on homepage: {', '.join(link['href'] for link in links)}")
         
         if not links:
             return None
-        
-        # Try pattern matching first (fast path)
-        pattern_match = _pattern_match_transparency_link(links)
-        if pattern_match:
-            print(f"[TRANSPARENCY DISCOVERY] Pattern match found: {pattern_match}")
-            return pattern_match
-        
         # Fall back to LLM
-        print(f"[TRANSPARENCY DISCOVERY] No pattern match, using LLM...")
         llm_match = _llm_identify_transparency_link(links)
         
         if llm_match:

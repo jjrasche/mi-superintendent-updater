@@ -124,9 +124,15 @@ def run_health_plan_check(district_id: int) -> Dict:
         
     except Exception as e:
         print(f"\n✗ Error during health plan check: {str(e)}")
+        
+        # Safely get district name
+        district_name = 'Unknown'
+        if 'district' in locals() and district is not None:
+            district_name = district.name
+        
         return {
             'district_id': district_id,
-            'district_name': district.name if 'district' in locals() else 'Unknown',
+            'district_name': district_name,
             'transparency_url': transparency_url if 'transparency_url' in locals() else None,
             'plans_found': 0,
             'plans': [],
