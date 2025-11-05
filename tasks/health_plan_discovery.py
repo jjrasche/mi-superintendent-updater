@@ -7,15 +7,20 @@ from config import USER_AGENT, REQUEST_TIMEOUT
 from utils.llm import build_link_identification_prompt, call_llm
 
 
-def find_transparency_link(domain: str) -> Optional[str]:
+def find_transparency_link(domain: str, district_name: str = None) -> Dict:
     """
     Find Budget/Salary Transparency link on district homepage.
     
     Args:
         domain: District domain (e.g., "exampledistrict.edu")
+        district_name: Optional district name for context
     
     Returns:
-        URL of transparency page, or None if not found
+        {
+            'url': str | None,
+            'reasoning': str,
+            'all_links': List[Dict]
+        }
     """
     # Ensure domain has protocol
     if not domain.startswith(('http://', 'https://')):
@@ -35,23 +40,36 @@ def find_transparency_link(domain: str) -> Optional[str]:
         
         # Extract all links
         links = _extract_links_from_homepage(response.text, domain)
-        print(f"[TRANSPARENCY DISCOVERY] Found {len(links)} links on homepage: {', '.join(link['href'] for link in links)}")
+        print(f"[TRANSPARENCY DISCOVERY] Found {len(links)} links on homepage")
         
         if not links:
-            return None
-        # Fall back to LLM
-        llm_match = _llm_identify_transparency_link(links)
+            return {
+                'url': None,
+                'reasoning': 'No links found on homepage',
+                'all_links': []
+            }
         
-        if llm_match:
-            print(f"[TRANSPARENCY DISCOVERY] LLM found: {llm_match}")
+        # Use LLM to identify transparency link
+        llm_result = _llm_identify_transparency_link(links, district_name)
+        
+        if llm_result['url']:
+            print(f"[TRANSPARENCY DISCOVERY] LLM found: {llm_result['url']}")
         else:
             print(f"[TRANSPARENCY DISCOVERY] No transparency link identified")
         
-        return llm_match
+        return {
+            'url': llm_result['url'],
+            'reasoning': llm_result['reasoning'],
+            'all_links': links
+        }
         
     except requests.RequestException as e:
         print(f"[TRANSPARENCY DISCOVERY] Failed to fetch homepage: {str(e)}")
-        return None
+        return {
+            'url': None,
+            'reasoning': f'Failed to fetch homepage: {str(e)}',
+            'all_links': []
+        }
 
 
 def _extract_links_from_homepage(html: str, base_domain: str) -> List[Dict]:
@@ -101,59 +119,24 @@ def _extract_links_from_homepage(html: str, base_domain: str) -> List[Dict]:
     return links
 
 
-def _pattern_match_transparency_link(links: List[Dict]) -> Optional[str]:
-    """
-    Try to find transparency link using pattern matching.
-    
-    Args:
-        links: List of link dicts
-    
-    Returns:
-        URL if found, None otherwise
-    """
-    transparency_keywords = [
-        'budget transparency',
-        'salary transparency',
-        'compensation transparency',
-        'budget & salary',
-        'budget and salary',
-        'budget/salary',
-        'financial transparency',
-        'transparency reporting'
-    ]
-    
-    for link in links:
-        text_lower = link['text'].lower()
-        href_lower = link['href'].lower()
-        
-        # Check for exact phrase matches in text
-        for keyword in transparency_keywords:
-            if keyword in text_lower:
-                return link['href']
-        
-        # Check for keyword combinations in URL
-        if 'transparency' in href_lower and any(
-            word in href_lower for word in ['budget', 'salary', 'compensation']
-        ):
-            return link['href']
-    
-    return None
-
-
-def _llm_identify_transparency_link(links: List[Dict]) -> Optional[str]:
+def _llm_identify_transparency_link(links: List[Dict], district_name: str = None) -> Dict:
     """
     Use LLM to identify transparency link.
     
     Args:
         links: List of link dicts
+        district_name: Optional district name for context
     
     Returns:
-        URL if identified, None otherwise
+        {
+            'url': str | None,
+            'reasoning': str
+        }
     """
     # Limit to first 50 links to avoid token limits
     links_subset = links[:50]
     
-    system_prompt, user_prompt = build_link_identification_prompt(links_subset)
+    system_prompt, user_prompt = build_link_identification_prompt(links_subset, district_name)
     
     try:
         result = call_llm(system_prompt, user_prompt)
@@ -167,13 +150,25 @@ def _llm_identify_transparency_link(links: List[Dict]) -> Optional[str]:
         if identified_url:
             valid_urls = {link['href'] for link in links_subset}
             if identified_url in valid_urls:
-                return identified_url
+                return {
+                    'url': identified_url,
+                    'reasoning': reasoning
+                }
             else:
                 print(f"[TRANSPARENCY DISCOVERY] LLM returned invalid URL")
-                return None
+                return {
+                    'url': None,
+                    'reasoning': f'LLM returned invalid URL: {reasoning}'
+                }
         
-        return None
+        return {
+            'url': None,
+            'reasoning': reasoning
+        }
         
     except Exception as e:
         print(f"[TRANSPARENCY DISCOVERY] LLM identification failed: {str(e)}")
-        return None
+        return {
+            'url': None,
+            'reasoning': f'LLM identification failed: {str(e)}'
+        }

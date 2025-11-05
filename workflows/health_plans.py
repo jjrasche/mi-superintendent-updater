@@ -6,6 +6,7 @@ from tasks.health_plan_extraction import extract_health_plans
 from tasks.fetcher import fetch_page
 from utils.html_parser import parse_html_to_text
 from utils.pdf_parser import extract_text_from_pdf
+from utils.debug_logger import get_logger
 
 
 def run_health_plan_check(district_id: int) -> Dict:
@@ -26,6 +27,7 @@ def run_health_plan_check(district_id: int) -> Dict:
         }
     """
     session = get_session()
+    logger = get_logger()
     
     try:
         # 1. Get district
@@ -39,9 +41,9 @@ def run_health_plan_check(district_id: int) -> Dict:
         
         # 2. Find transparency link on homepage
         print("\n[STEP 1] Finding transparency link...")
-        transparency_url = find_transparency_link(district.domain)
+        transparency_result = find_transparency_link(district.domain, district.name)
         
-        if not transparency_url:
+        if not transparency_result['url']:
             print("✗ No transparency link found on homepage")
             return {
                 'district_id': district_id,
@@ -52,7 +54,17 @@ def run_health_plan_check(district_id: int) -> Dict:
                 'status': 'no_link'
             }
         
+        transparency_url = transparency_result['url']
         print(f"✓ Found transparency page: {transparency_url}")
+        
+        # Log transparency discovery
+        logger.log_transparency_discovery(
+            district.name,
+            district.domain,
+            transparency_url,
+            transparency_result.get('all_links', []),
+            transparency_result.get('reasoning')
+        )
         
         # 3. Fetch transparency page
         print("\n[STEP 2] Fetching transparency page...")
@@ -75,13 +87,14 @@ def run_health_plan_check(district_id: int) -> Dict:
         # 4. Determine content type and parse
         print("\n[STEP 3] Parsing content...")
         content_type = fetch_result.get('content_type', 'html')
+        raw_content = fetch_result['html']
         
         if content_type == 'pdf':
             print("Content type: PDF")
-            text_content = extract_text_from_pdf(fetch_result['html'])
+            text_content = extract_text_from_pdf(raw_content)
         else:
             print("Content type: HTML")
-            text_content = parse_html_to_text(fetch_result['html'])
+            text_content = parse_html_to_text(raw_content)
         
         print(f"✓ Parsed {len(text_content)} characters")
         
@@ -91,6 +104,20 @@ def run_health_plan_check(district_id: int) -> Dict:
         
         # Count non-empty plans
         valid_plans = [p for p in plans if not p.get('is_empty', True)]
+        
+        # Log health plan extraction
+        extraction_result = {
+            'plans': plans,
+            'reasoning': plans[0].get('reasoning', '') if plans else ''
+        }
+        logger.log_health_plan_fetch(
+            district.name,
+            transparency_url,
+            raw_content,
+            text_content,
+            extraction_result,
+            content_type
+        )
         
         # 6. Print results
         print(f"\n{'='*60}")
@@ -153,10 +180,13 @@ def run_bulk_health_plan_check(district_ids: List[int]) -> List[Dict]:
     Returns:
         List of result dicts from run_health_plan_check
     """
+    logger = get_logger()
     results = []
     
     print(f"\n{'='*60}")
     print(f"BULK HEALTH PLAN CHECK - {len(district_ids)} districts")
+    print(f"{'='*60}")
+    print(f"Debug logs will be saved to: {logger.run_dir}")
     print(f"{'='*60}\n")
     
     for idx, district_id in enumerate(district_ids, 1):
@@ -197,6 +227,9 @@ def run_bulk_health_plan_check(district_ids: List[int]) -> List[Dict]:
     total_plans = sum(r['plans_found'] for r in results)
     print(f"\nTotal plans extracted: {total_plans}")
     
+    print(f"{'='*60}")
+    print(f"\nDebug logs saved to: {logger.run_dir}")
+    print("Check the logs for detailed HTML and extraction information")
     print(f"{'='*60}\n")
     
     return results
