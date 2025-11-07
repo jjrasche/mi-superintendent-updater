@@ -2,7 +2,6 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from urllib.parse import urljoin
 from config import MAX_TEXT_LENGTH
 
-""" Recommendation: Consider using a library like trafilatura or readability-lxml for cleaner extraction."""
 def parse_html_to_text(html: str, preserve_document_links: bool = False, base_url: str = None) -> str:
     """
     Convert raw HTML to structured text for LLM.
@@ -10,11 +9,12 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
     Args:
         html: Raw HTML string
         preserve_document_links: If True, preserve PDF/doc links in format "text (URL: link)"
+        base_url: Base URL for converting relative links to absolute
     
     Returns:
         Cleaned text preserving headings and structure
     """
-    # Detect if this is XML content (sitemap, RSS, etc.)
+    # Detect if this is XML content
     html_lower = html[:200].lower()
     is_xml = (
         html.strip().startswith('<?xml') or 
@@ -23,11 +23,7 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
         '<sitemap' in html_lower
     )
     
-    # Use appropriate parser
-    if is_xml:
-        soup = BeautifulSoup(html, 'xml')
-    else:
-        soup = BeautifulSoup(html, 'html.parser')
+    soup = BeautifulSoup(html, 'xml' if is_xml else 'html.parser')
     
     # Remove unwanted elements
     for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript']):
@@ -47,15 +43,18 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
         if not isinstance(element, Tag):
             return
         
-        # Handle links - CRITICAL for email/phone/document extraction
+        # Handle links
         if element.name == 'a':
             href = element.get('href', '')
             text = element.get_text(strip=True)
             
+            # Convert relative URL to absolute if base_url provided
+            if href and base_url and not href.startswith(('http://', 'https://', 'mailto:', 'tel:', 'javascript:', '#')):
+                href = urljoin(base_url, href)
+            
             # Extract email from mailto links
             if href.startswith('mailto:'):
                 email = href.replace('mailto:', '').strip()
-                # Include both the name and explicit email
                 if text and text.lower() != email.lower():
                     current_section.append(f"{text} (Email: {email})")
                 else:
@@ -69,20 +68,17 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
                     current_section.append(f"Phone: {phone}")
             # Preserve document links (PDFs, docs, etc.) if requested
             elif preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
-                absolute_href = urljoin(base_url, href) if base_url else href
-                print(f"[DEBUG] Found document link: '{text}' -> {absolute_href}")
                 if text:
-                    current_section.append(f"{text} (URL: {absolute_href})")
+                    current_section.append(f"{text} (URL: {href})")
                 else:
-                    current_section.append(f"Document: {absolute_href}")
+                    current_section.append(f"Document: {href}")
             # Regular links - just keep the text
             elif text:
                 current_section.append(text)
-            return  # Don't process children, we already got the text
+            return
         
         # Handle headings
         if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            # Start new section if we have content
             if current_section:
                 sections.append(' '.join(current_section))
                 current_section.clear()
@@ -98,6 +94,10 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
                     if child.name == 'a':
                         href = child.get('href', '')
                         text = child.get_text(strip=True)
+                        
+                        # Convert relative URL to absolute
+                        if href and base_url and not href.startswith(('http://', 'https://', 'mailto:', 'tel:', 'javascript:', '#')):
+                            href = urljoin(base_url, href)
                         
                         if href.startswith('mailto:'):
                             email = href.replace('mailto:', '').strip()
@@ -130,10 +130,8 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
         
         # Handle paragraphs and divs
         elif element.name in ['p', 'div', 'article', 'section', 'main']:
-            # Process children recursively instead of getting all text at once
             for child in element.children:
                 process_element(child, depth + 1)
-            # Add spacing after paragraph-like elements
             if element.name in ['p', 'article', 'section']:
                 if current_section and current_section[-1] != '':
                     current_section.append('')
@@ -141,17 +139,22 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
         # Handle lists
         elif element.name == 'ul' or element.name == 'ol':
             for li in element.find_all('li', recursive=False):
-                # Process list items recursively to catch links
                 li_parts = []
-                for child in li.children:
-                    if isinstance(child, NavigableString):
-                        text = str(child).strip()
+                
+                def process_li_content(elem):
+                    """Process list item content recursively"""
+                    if isinstance(elem, NavigableString):
+                        text = str(elem).strip()
                         if text:
                             li_parts.append(text)
-                    elif isinstance(child, Tag):
-                        if child.name == 'a':
-                            href = child.get('href', '')
-                            text = child.get_text(strip=True)
+                    elif isinstance(elem, Tag):
+                        if elem.name == 'a':
+                            href = elem.get('href', '')
+                            text = elem.get_text(strip=True)
+                            
+                            # Convert relative URL to absolute
+                            if href and base_url and not href.startswith(('http://', 'https://', 'mailto:', 'tel:', 'javascript:', '#')):
+                                href = urljoin(base_url, href)
                             
                             if preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
                                 if text:
@@ -161,9 +164,12 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
                             elif text:
                                 li_parts.append(text)
                         else:
-                            text = child.get_text(strip=True)
-                            if text:
-                                li_parts.append(text)
+                            # Recurse into nested tags (like <p> inside <li>)
+                            for child in elem.children:
+                                process_li_content(child)
+                
+                for child in li.children:
+                    process_li_content(child)
                 
                 if li_parts:
                     current_section.append(f"• {' '.join(li_parts)}")
