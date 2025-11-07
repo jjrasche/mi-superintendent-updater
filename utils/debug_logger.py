@@ -6,6 +6,15 @@ import json
 
 class DebugLogger:
     """Logger for debugging scraping process."""
+    # Global instance
+    _logger = None
+
+    def get_logger():
+        """Get or create debug logger."""
+        global _logger
+        if _logger is None:
+            _logger = DebugLogger()
+        return _logger
     
     def __init__(self, base_dir: str = "debug_logs"):
         self.base_dir = Path(base_dir)
@@ -166,13 +175,27 @@ class DebugLogger:
         if extraction_result.get('reasoning'):
             print(f"[DEBUG]   Reasoning: {extraction_result['reasoning'][:100]}...")
 
-
-# Global instance
-_logger = None
-
-def get_logger():
-    """Get or create debug logger."""
-    global _logger
-    if _logger is None:
-        _logger = DebugLogger()
-    return _logger
+    def log_llm_call(self, district_name: str, prompt_type: str, 
+                    system_prompt: str, user_prompt: str, 
+                    llm_response: dict):
+        """Log LLM prompt and response."""
+        district_slug = district_name.replace(' ', '_').replace('/', '_')
+        
+        district_dir = self.run_dir / district_slug
+        district_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%H%M%S')
+        log_file = district_dir / f"{prompt_type}_{timestamp}_llm.json"
+        
+        data = {
+            'prompt_type': prompt_type,
+            'timestamp': datetime.now().isoformat(),
+            'system_prompt': system_prompt,
+            'user_prompt': user_prompt,
+            'llm_response': llm_response
+        }
+        
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        
+        print(f"[DEBUG] LLM call logged to: {log_file}")

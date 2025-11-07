@@ -133,20 +133,10 @@ def _extract_links_from_homepage(html: str, base_domain: str) -> List[Dict]:
 
 
 def _llm_identify_transparency_link(links: List[Dict], district_name: str = None) -> Dict:
-    """
-    Use LLM to identify transparency link.
+    """Use LLM to identify transparency link."""
+    from utils.debug_logger import get_logger
+    logger = get_logger()
     
-    Args:
-        links: List of link dicts
-        district_name: Optional district name for context
-    
-    Returns:
-        {
-            'url': str | None,
-            'reasoning': str
-        }
-    """
-    # Limit to first 50 links to avoid token limits
     links_subset = links[:50]
     
     system_prompt, user_prompt = build_link_identification_prompt(links_subset, district_name)
@@ -154,6 +144,15 @@ def _llm_identify_transparency_link(links: List[Dict], district_name: str = None
     try:
         result = call_llm(system_prompt, user_prompt)
         
+        # Log the LLM call
+        if district_name:
+            logger.log_llm_call(
+                district_name,
+                'transparency_link_identification',
+                system_prompt,
+                user_prompt,
+                result
+            )        
         identified_url = result.get('url')
         reasoning = result.get('reasoning', '')
         

@@ -203,6 +203,8 @@ These links may be labeled:
 - "Budget & Salary Compensation Transparency"
 - "Financial Transparency"
 - "Transparency Reporting"
+- "State Reporting" (common in Michigan - often contains transparency data)
+- "Financial Reports"
 - Or similar variations
 
 Your task is to identify which link from the provided list is most likely the Budget/Salary Transparency page.

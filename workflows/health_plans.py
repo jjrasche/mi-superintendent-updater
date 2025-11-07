@@ -114,7 +114,16 @@ def run_health_plan_check(district_id: int) -> Dict:
         # 2. Find transparency link on homepage (using Playwright)
         print("\n[STEP 1] Finding transparency link...")
         transparency_result = find_transparency_link(district.domain, district.name)
-        
+
+        # Log transparency discovery (moved here - before early return)
+        logger.log_transparency_discovery(
+            district.name,
+            district.domain,
+            transparency_result['url'],  # Will be None if not found
+            transparency_result.get('all_links', []),
+            transparency_result.get('reasoning')
+        )
+
         if not transparency_result['url']:
             print("✗ No transparency link found on homepage")
             return {
@@ -125,18 +134,9 @@ def run_health_plan_check(district_id: int) -> Dict:
                 'plans': [],
                 'status': 'no_link'
             }
-        
+
         transparency_url = transparency_result['url']
         print(f"✓ Found transparency page: {transparency_url}")
-        
-        # Log transparency discovery
-        logger.log_transparency_discovery(
-            district.name,
-            district.domain,
-            transparency_url,
-            transparency_result.get('all_links', []),
-            transparency_result.get('reasoning')
-        )
         
         # 3. Fetch transparency page with Playwright
         print("\n[STEP 2] Fetching transparency page with Playwright...")
