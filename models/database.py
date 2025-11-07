@@ -111,7 +111,7 @@ class HealthPlan(Base):
     coverage_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Source metadata
-    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str] = mapped_column(Text, nullable=True)
     extracted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships

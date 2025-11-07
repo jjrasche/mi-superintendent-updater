@@ -69,10 +69,12 @@ def parse_html_to_text(html: str, preserve_document_links: bool = False, base_ur
                     current_section.append(f"Phone: {phone}")
             # Preserve document links (PDFs, docs, etc.) if requested
             elif preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
+                absolute_href = urljoin(base_url, href) if base_url else href
+                print(f"[DEBUG] Found document link: '{text}' -> {absolute_href}")
                 if text:
-                    current_section.append(f"{text} (URL: {href})")
+                    current_section.append(f"{text} (URL: {absolute_href})")
                 else:
-                    current_section.append(f"Document: {href}")
+                    current_section.append(f"Document: {absolute_href}")
             # Regular links - just keep the text
             elif text:
                 current_section.append(text)
