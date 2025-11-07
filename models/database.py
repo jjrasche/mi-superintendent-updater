@@ -120,8 +120,8 @@ class HealthPlan(Base):
     __table_args__ = (
         Index('idx_health_plan_district', 'district_id'),
         Index('idx_health_plan_provider', 'provider'),
+        UniqueConstraint('district_id', 'plan_name', 'provider', 'plan_type', name='uq_district_plan'),
     )
-    
     def __repr__(self):
         return f"<HealthPlan(id={self.id}, plan_name='{self.plan_name}', provider='{self.provider}')>"
 

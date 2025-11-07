@@ -1,13 +1,15 @@
 from bs4 import BeautifulSoup, NavigableString, Tag
+from urllib.parse import urljoin
 from config import MAX_TEXT_LENGTH
 
 """ Recommendation: Consider using a library like trafilatura or readability-lxml for cleaner extraction."""
-def parse_html_to_text(html: str) -> str:
+def parse_html_to_text(html: str, preserve_document_links: bool = False, base_url: str = None) -> str:
     """
     Convert raw HTML to structured text for LLM.
     
     Args:
         html: Raw HTML string
+        preserve_document_links: If True, preserve PDF/doc links in format "text (URL: link)"
     
     Returns:
         Cleaned text preserving headings and structure
@@ -45,7 +47,7 @@ def parse_html_to_text(html: str) -> str:
         if not isinstance(element, Tag):
             return
         
-        # Handle links - CRITICAL for email/phone extraction
+        # Handle links - CRITICAL for email/phone/document extraction
         if element.name == 'a':
             href = element.get('href', '')
             text = element.get_text(strip=True)
@@ -65,6 +67,12 @@ def parse_html_to_text(html: str) -> str:
                     current_section.append(f"{text} (Phone: {phone})")
                 else:
                     current_section.append(f"Phone: {phone}")
+            # Preserve document links (PDFs, docs, etc.) if requested
+            elif preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
+                if text:
+                    current_section.append(f"{text} (URL: {href})")
+                else:
+                    current_section.append(f"Document: {href}")
             # Regular links - just keep the text
             elif text:
                 current_section.append(text)
@@ -101,6 +109,11 @@ def parse_html_to_text(html: str) -> str:
                                 heading_parts.append(f"{text} (Phone: {phone})")
                             else:
                                 heading_parts.append(f"Phone: {phone}")
+                        elif preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
+                            if text:
+                                heading_parts.append(f"{text} (URL: {href})")
+                            else:
+                                heading_parts.append(f"Document: {href}")
                         elif text:
                             heading_parts.append(text)
                     elif child.name == 'br':
@@ -126,9 +139,32 @@ def parse_html_to_text(html: str) -> str:
         # Handle lists
         elif element.name == 'ul' or element.name == 'ol':
             for li in element.find_all('li', recursive=False):
-                text = li.get_text(strip=True)
-                if text:
-                    current_section.append(f"• {text}")
+                # Process list items recursively to catch links
+                li_parts = []
+                for child in li.children:
+                    if isinstance(child, NavigableString):
+                        text = str(child).strip()
+                        if text:
+                            li_parts.append(text)
+                    elif isinstance(child, Tag):
+                        if child.name == 'a':
+                            href = child.get('href', '')
+                            text = child.get_text(strip=True)
+                            
+                            if preserve_document_links and href and any(href.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.xlsx', '.xls']):
+                                if text:
+                                    li_parts.append(f"{text} (URL: {href})")
+                                else:
+                                    li_parts.append(f"Document: {href}")
+                            elif text:
+                                li_parts.append(text)
+                        else:
+                            text = child.get_text(strip=True)
+                            if text:
+                                li_parts.append(text)
+                
+                if li_parts:
+                    current_section.append(f"• {' '.join(li_parts)}")
         
         # Handle tables
         elif element.name == 'table':

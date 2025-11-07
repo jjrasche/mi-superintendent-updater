@@ -114,6 +114,11 @@ def extract_district_health_plans(district_id: int) -> Dict:
         content_type = fetch_result.get('content_type', 'html')
         raw_content = fetch_result['html']
         text_content = content_type == 'html' and parse_html_to_text(raw_content) or extract_text_from_pdf(raw_content)
+        # For health plans, preserve document links in parsed text
+        if content_type == 'html':
+            text_content = parse_html_to_text(raw_content, preserve_document_links=True, base_url=transparency_url)
+        else:
+            text_content = extract_text_from_pdf(raw_content)
         
         # 5. Extract health plans
         print("\n[STEP 4] Extracting health plans...")
@@ -121,15 +126,21 @@ def extract_district_health_plans(district_id: int) -> Dict:
         valid_plans = [p for p in plans if not p.get('is_empty', True)]
         
         if valid_plans:
-            # Save plans to database with individual source URLs
             for plan in valid_plans:
+                existing = session.query(HealthPlan).filter_by(district_id=district_id,plan_name=plan['plan_name'],provider=plan['provider'],plan_type=plan['plan_type']).first()
+                if existing:
+                    # Optionally update extracted_at or source_url if better
+                    if plan.get('source_url') and not existing.source_url:
+                        existing.source_url = plan['source_url']
+                    existing.extracted_at = datetime.utcnow()
+                    continue
                 health_plan = HealthPlan(
                     district_id=district_id, 
                     plan_name=plan['plan_name'], 
                     provider=plan['provider'], 
                     plan_type=plan['plan_type'], 
                     coverage_details=plan.get('coverage_details'), 
-                    source_url=plan.get('source_url') or transparency_url,  # Fallback to transparency page
+                    source_url=plan.get('source_url'),
                     extracted_at=datetime.utcnow()
                 )
                 session.add(health_plan)
