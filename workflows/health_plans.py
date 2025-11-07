@@ -1,7 +1,7 @@
 from typing import Dict, List
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-
-from models.database import get_session, District
+from datetime import datetime
+from models.database import HealthPlan, get_session, District
 from tasks.health_plan_discovery import find_transparency_link
 from tasks.health_plan_extraction import extract_health_plans
 from utils.html_parser import parse_html_to_text
@@ -89,34 +89,61 @@ def extract_district_health_plans(district_id: int) -> Dict:
         district = session.query(District).filter_by(id=district_id).first()
         if not district: raise ValueError(f"District {district_id} not found")
         print_header(f"HEALTH PLAN CHECK: {district.name} ({district.domain})")
+        
         # 2. Find transparency link on homepage 
         transparency_result = find_transparency_link(district.domain, district.name)
-        logger.log_transparency_discovery(district.name,district.domain,transparency_result['url'], transparency_result.get('all_links', []),transparency_result.get('reasoning'))
+        logger.log_transparency_discovery(district.name, district.domain, transparency_result['url'], 
+                                         transparency_result.get('all_links', []), transparency_result.get('reasoning'))
+        
         if not transparency_result['url']:
             print("✗ No transparency link found on homepage")
             return { 'district_id': district_id, 'district_name': district.name, 'transparency_url': None, 'plans_found': 0, 'plans': [], 'status': 'no_link' }
+        
         transparency_url = transparency_result['url']
         print(f"✓ Found transparency page: {transparency_url}")
+        
         # 3. Fetch transparency page with Playwright
         fetch_result = _fetch_transparency_page_with_playwright(transparency_url)
         if fetch_result['status'] != 'success':
             print(f"✗ Failed to fetch: {fetch_result['error_message']}")
             return { 'district_id': district_id, 'district_name': district.name, 'transparency_url': transparency_url, 'plans_found': 0, 'plans': [], 'status': 'fetch_error', 'error_message': fetch_result['error_message'] }
         print(f"✓ Successfully fetched page")
+        
         # 4. Determine content type and parse
         print("\n[STEP 3] Parsing content...")
         content_type = fetch_result.get('content_type', 'html')
         raw_content = fetch_result['html']
         text_content = content_type == 'html' and parse_html_to_text(raw_content) or extract_text_from_pdf(raw_content)
+        
         # 5. Extract health plans
         print("\n[STEP 4] Extracting health plans...")
         plans = extract_health_plans(text_content, district.name)
         valid_plans = [p for p in plans if not p.get('is_empty', True)]
+        
+        if valid_plans:
+            # Save plans to database with individual source URLs
+            for plan in valid_plans:
+                health_plan = HealthPlan(
+                    district_id=district_id, 
+                    plan_name=plan['plan_name'], 
+                    provider=plan['provider'], 
+                    plan_type=plan['plan_type'], 
+                    coverage_details=plan.get('coverage_details'), 
+                    source_url=plan.get('source_url') or transparency_url,  # Fallback to transparency page
+                    extracted_at=datetime.utcnow()
+                )
+                session.add(health_plan)
+            district.transparency_url = transparency_url
+            session.commit()
+        
         print(f"✓ Found {len(valid_plans)} health plan(s):\n")
         extraction_result = { 'plans': plans, 'reasoning': plans[0].get('reasoning', '') if plans else '' }
         logger.log_health_plan_fetch( district.name, transparency_url, raw_content, text_content, extraction_result, content_type )
+        
         return { 'district_id': district_id, 'district_name': district.name, 'transparency_url': transparency_url, 'plans_found': len(valid_plans), 'plans': valid_plans if valid_plans else plans, 'status': 'success' }
+    
     except Exception as e:
+        session.rollback()
         print(f"\n✗ Error during health plan check: {str(e)}")
         district_name = district.name if 'district' in locals() and district is not None else 'Unknown'
         return { 'district_id': district_id, 'district_name': district_name, 'transparency_url': transparency_url if 'transparency_url' in locals() else None, 'plans_found': 0, 'plans': [], 'status': 'error', 'error_message': str(e) }

@@ -226,7 +226,7 @@ Identify the Budget/Salary Transparency link."""
 
 def build_health_plan_extraction_prompt(text_content: str, district_name: str) -> tuple[str, str]:
     """
-    Build prompt to extract health insurance plans.
+    Build prompt to extract health insurance plans with source URLs.
     
     Args:
         text_content: Parsed text from transparency page
@@ -248,6 +248,7 @@ Return valid JSON with this structure:
             "provider": "string",
             "plan_type": "Medical|Dental|Vision|Disability|Life Insurance|Long-Term Care|Other",
             "coverage_details": "string or null",
+            "source_url": "string or null",
             "is_empty": false
         }
     ],
@@ -268,16 +269,23 @@ EXTRACTION RULES:
    - Must be one of: Medical, Dental, Vision, Disability, Life Insurance, Long-Term Care, Other
    - If text says "Health" or "Health Insurance", classify as "Medical"
 
-4. COVERAGE DETAILS (Optional)
+4. SOURCE URL (Critical)
+   - Extract the URL/link associated with each plan name
+   - Look for: PDF links, document links, or URLs near the plan name
+   - Common patterns: plan name followed by "(PDF: url)" or links embedded in plan text
+   - If multiple plans share same document, use same URL for all
+   - If no URL found for a plan, set to null
+
+5. COVERAGE DETAILS (Optional)
    - Include any mentioned: deductibles, copays, coverage percentages, network types (PPO, HMO)
    - Keep brief - 1-2 sentences max
 
-5. EMPTY HANDLING
+6. EMPTY HANDLING
    - If page has NO health plan information → return single plan with is_empty=true, all fields null
    - If page has health plan section but it's empty/TBD → return single plan with is_empty=true
    - Only mark individual plans as is_empty=true if that specific plan listing is incomplete
 
-6. MULTIPLE PLANS
+7. MULTIPLE PLANS
    - Extract ALL plans mentioned
    - Include plans for different employee groups (teachers, administrators, support staff)
    - Include all plan options even if employees can only choose one
@@ -285,31 +293,35 @@ EXTRACTION RULES:
 EXAMPLES:
 
 ✓ CORRECT:
-Input: "Medical: MESSA ABC Plan | Dental: Delta Dental PPO | Vision: VSP"
+Input: "Medical: MESSA ABC Plan (PDF: http://example.com/messa.pdf) | Dental: Delta Dental PPO | Vision: VSP"
 Output: {
     "plans": [
-        {"plan_name": "MESSA ABC Plan", "provider": "MESSA", "plan_type": "Medical", "coverage_details": null, "is_empty": false},
-        {"plan_name": "Delta Dental PPO", "provider": "Delta Dental", "plan_type": "Dental", "coverage_details": "PPO network", "is_empty": false},
-        {"plan_name": "VSP", "provider": "VSP", "plan_type": "Vision", "coverage_details": null, "is_empty": false}
+        {"plan_name": "MESSA ABC Plan", "provider": "MESSA", "plan_type": "Medical", "coverage_details": null, 
+         "source_url": "http://example.com/messa.pdf", "is_empty": false},
+        {"plan_name": "Delta Dental PPO", "provider": "Delta Dental", "plan_type": "Dental", "coverage_details": "PPO network", 
+         "source_url": null, "is_empty": false},
+        {"plan_name": "VSP", "provider": "VSP", "plan_type": "Vision", "coverage_details": null, 
+         "source_url": null, "is_empty": false}
     ],
-    "reasoning": "Found 3 health plans: medical, dental, and vision"
+    "reasoning": "Found 3 health plans with 1 source document"
 }
 
 ✓ CORRECT:
-Input: "Health Insurance: Blue Cross Blue Shield of Michigan, 80/20 cost share, $1000 deductible"
+Input: "Health Insurance: Blue Cross Blue Shield of Michigan (Email: benefits@district.edu), 80/20 cost share, $1000 deductible"
 Output: {
     "plans": [
         {"plan_name": "Blue Cross Blue Shield Medical", "provider": "Blue Cross Blue Shield", "plan_type": "Medical", 
-         "coverage_details": "80/20 cost share, $1000 deductible", "is_empty": false}
+         "coverage_details": "80/20 cost share, $1000 deductible", "source_url": null, "is_empty": false}
     ],
-    "reasoning": "Found BCBS medical plan with cost sharing details"
+    "reasoning": "Found BCBS medical plan with cost sharing details, no document URL"
 }
 
 ✗ WRONG:
 Input: "Health benefits information coming soon"
 Output: {
     "plans": [
-        {"plan_name": "TBD", "provider": "Unknown", "plan_type": "Medical", "coverage_details": null, "is_empty": false}
+        {"plan_name": "TBD", "provider": "Unknown", "plan_type": "Medical", "coverage_details": null, 
+         "source_url": null, "is_empty": false}
     ]
 }
 Reason: Should mark as is_empty=true when no actual plan data exists"""
@@ -319,6 +331,6 @@ Reason: Should mark as is_empty=true when no actual plan data exists"""
 Transparency Page Content:
 {text_content}
 
-Extract all employee health insurance plans following the rules exactly."""
+Extract all employee health insurance plans with their source URLs following the rules exactly."""
 
     return system_prompt, user_prompt

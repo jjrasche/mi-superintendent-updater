@@ -19,6 +19,7 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
                 'provider': str,
                 'plan_type': str,
                 'coverage_details': str | None,
+                'source_url': str | None,
                 'is_empty': bool
             },
             ...
@@ -35,6 +36,7 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
             'provider': None,
             'plan_type': None,
             'coverage_details': None,
+            'source_url': None,
             'is_empty': True,
             'reasoning': 'Content too short (less than 100 characters)'
         }]
@@ -60,8 +62,9 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
             validated_plans.append(validated_plan)
             
             if not validated_plan['is_empty']:
+                source_info = f" → {validated_plan['source_url']}" if validated_plan['source_url'] else ""
                 print(f"[HEALTH PLAN EXTRACTION]   ✓ {validated_plan['plan_name']} "
-                      f"({validated_plan['provider']}) - {validated_plan['plan_type']}")
+                      f"({validated_plan['provider']}) - {validated_plan['plan_type']}{source_info}")
         
         # If no valid plans found, return empty result
         if not any(not p['is_empty'] for p in validated_plans):
@@ -71,6 +74,7 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
                 'provider': None,
                 'plan_type': None,
                 'coverage_details': None,
+                'source_url': None,
                 'is_empty': True,
                 'reasoning': reasoning or 'No health insurance plans found in content'
             }]
@@ -84,6 +88,7 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
             'provider': None,
             'plan_type': None,
             'coverage_details': None,
+            'source_url': None,
             'is_empty': True,
             'reasoning': f'LLM extraction failed: {str(e)}'
         }]
@@ -107,6 +112,7 @@ def _validate_plan(plan: Dict) -> Dict:
     provider = plan.get('provider')
     plan_type = plan.get('plan_type')
     coverage_details = plan.get('coverage_details')
+    source_url = plan.get('source_url')
     reasoning = plan.get('reasoning', '')
     
     # If any required field is missing, mark as empty
@@ -122,11 +128,19 @@ def _validate_plan(plan: Dict) -> Dict:
     if plan_type:
         plan_type = _standardize_plan_type(plan_type)
     
+    # Clean source URL
+    if source_url and isinstance(source_url, str):
+        source_url = source_url.strip()
+        # Basic validation - must start with http/https
+        if not source_url.startswith(('http://', 'https://')):
+            source_url = None
+    
     return {
         'plan_name': plan_name,
         'provider': provider,
         'plan_type': plan_type,
         'coverage_details': coverage_details,
+        'source_url': source_url,
         'is_empty': is_empty,
         'reasoning': reasoning
     }
