@@ -3,18 +3,18 @@ from pathlib import Path
 from datetime import datetime
 import json
 
+# Module-level singleton
+_logger = None
+
+def get_logger():
+    """Get or create debug logger."""
+    global _logger
+    if _logger is None:
+        _logger = DebugLogger()
+    return _logger
 
 class DebugLogger:
     """Logger for debugging scraping process."""
-    # Global instance
-    _logger = None
-
-    def get_logger():
-        """Get or create debug logger."""
-        global _logger
-        if _logger is None:
-            _logger = DebugLogger()
-        return _logger
     
     def __init__(self, base_dir: str = "debug_logs"):
         self.base_dir = Path(base_dir)

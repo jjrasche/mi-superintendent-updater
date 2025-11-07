@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from models.database import init_db
-from workflows.health_plans import run_health_plan_check, run_bulk_health_plan_check
+from workflows.health_plans import extract_district_health_plans, run_bulk_health_plan_check
 
 
 def main():
@@ -48,7 +48,7 @@ def main():
     
     # Run checks
     if len(district_ids) == 1:
-        result = run_health_plan_check(district_ids[0])
+        result = extract_district_health_plans(district_ids[0])
         
         # Print detailed result
         print("\n" + "=" * 60)

@@ -193,33 +193,21 @@ def build_link_identification_prompt(links: list[dict], district_name: str = Non
     Returns:
         (system_prompt, user_prompt)
     """
-    system_prompt = """You are an expert at identifying transparency and financial reporting links on school district websites.
+    system_prompt = """Identify the Budget/Salary Transparency link from Michigan school district homepage links.
 
-Michigan law requires school districts to post Budget & Salary/Compensation Transparency information on their website with a clearly visible link on the homepage.
+    Michigan districts must post "Budget & Salary Compensation Transparency" data. Links are typically labeled:
+    - "State Reporting" (most common in Michigan)
+    - "Transparency Reporting" 
+    - "Budget/Salary Transparency"
+    - "Financial Transparency"
 
-These links may be labeled:
-- "Budget Transparency"
-- "Salary Transparency"
-- "Budget & Salary Compensation Transparency"
-- "Financial Transparency"
-- "Transparency Reporting"
-- "State Reporting" (common in Michigan - often contains transparency data)
-- "Financial Reports"
-- Or similar variations
+    Return JSON:
+    {
+        "url": "exact URL from list",
+        "reasoning": "why you chose this"
+    }
 
-Your task is to identify which link from the provided list is most likely the Budget/Salary Transparency page.
-
-Return a JSON object:
-{
-    "url": "the full URL of the transparency page",
-    "reasoning": "Brief explanation of why you chose this link"
-}
-
-If no suitable link is found, return:
-{
-    "url": null,
-    "reasoning": "No transparency link found"
-}"""
+    If none match, return {"url": null, "reasoning": "explanation"}"""
 
     links_list = "\n".join(
         f"{i+1}. Text: \"{link['text']}\"\n   URL: {link['href']}"

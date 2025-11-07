@@ -22,12 +22,16 @@ class District(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     domain: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     state: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
+    transparency_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
     fetched_pages: Mapped[List["FetchedPage"]] = relationship(
         "FetchedPage", back_populates="district", cascade="all, delete-orphan"
+    )
+    health_plans: Mapped[List["HealthPlan"]] = relationship(
+        "HealthPlan", back_populates="district", cascade="all, delete-orphan"
     )
     
     __table_args__ = (
@@ -91,6 +95,35 @@ class Extraction(Base):
     
     def __repr__(self):
         return f"<Extraction(id={self.id}, name='{self.name}', is_empty={self.is_empty})>"
+
+
+class HealthPlan(Base):
+    """Employee health insurance plan"""
+    __tablename__ = 'health_plans'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    district_id: Mapped[int] = mapped_column(Integer, ForeignKey('districts.id'), nullable=False)
+    
+    # Core plan data
+    plan_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider: Mapped[str] = mapped_column(String(255), nullable=False)
+    plan_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Medical, Dental, Vision, etc.
+    coverage_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Source metadata
+    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    extracted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relationships
+    district: Mapped["District"] = relationship("District", back_populates="health_plans")
+    
+    __table_args__ = (
+        Index('idx_health_plan_district', 'district_id'),
+        Index('idx_health_plan_provider', 'provider'),
+    )
+    
+    def __repr__(self):
+        return f"<HealthPlan(id={self.id}, plan_name='{self.plan_name}', provider='{self.provider}')>"
 
 
 # Database engine and session factory
