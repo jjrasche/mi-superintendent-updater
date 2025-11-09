@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from utils.llm import build_health_plan_extraction_prompt, call_llm
+from services.extraction import extract_health_plans as llm_extract_plans
 
 
 def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
@@ -41,15 +41,13 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
             'reasoning': 'Content too short (less than 100 characters)'
         }]
     
-    # Build prompts and call LLM
-    system_prompt, user_prompt = build_health_plan_extraction_prompt(text_content, district_name)
-    
+    # Call LLM extraction service
     try:
-        result = call_llm(system_prompt, user_prompt)
-        
-        # LLM should return {'plans': [...], 'reasoning': '...'}
-        plans = result.get('plans', [])
-        reasoning = result.get('reasoning', '')
+        result = llm_extract_plans(text_content, district_name)
+
+        # Extract plans and reasoning from Pydantic model
+        plans = [plan.model_dump() for plan in result.plans]
+        reasoning = result.reasoning
         
         print(f"[HEALTH PLAN EXTRACTION] LLM returned {len(plans)} plans")
         if reasoning:

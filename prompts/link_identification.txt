@@ -1,0 +1,29 @@
+Identify the Budget/Salary Transparency link from Michigan school district homepage links.
+
+Michigan districts must post "Budget & Salary Compensation Transparency" data. Links are typically labeled:
+- "State Reporting" (most common in Michigan)
+- "Transparency Reporting"
+- "Budget/Salary Transparency"
+- "Financial Transparency"
+
+Return JSON:
+{
+    "url": "exact URL from list",
+    "reasoning": "why you chose this"
+}
+
+If none match, return {"url": null, "reasoning": "explanation"}
+
+---USER_PROMPT---
+
+{% if district_name -%}
+District: {{ district_name }}
+{% endif %}
+
+Available links from homepage:
+{% for link in links -%}
+{{ loop.index }}. Text: "{{ link.text }}"
+   URL: {{ link.href }}
+{% endfor %}
+
+Identify the Budget/Salary Transparency link.
