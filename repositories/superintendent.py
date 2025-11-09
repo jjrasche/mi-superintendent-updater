@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Dict, Optional
 from models.database import FetchedPage, Extraction
+from models.enums import WorkflowMode, FetchStatus
 from .base import BaseRepository
 
 class SuperintendentRepository(BaseRepository):
@@ -9,7 +10,7 @@ class SuperintendentRepository(BaseRepository):
     # Queries
     get_monitoring_urls = lambda self, district_id: [
         row[0] for row in self.session.query(FetchedPage.url)
-        .filter_by(district_id=district_id, mode='monitoring', status='success')
+        .filter_by(district_id=district_id, mode=WorkflowMode.MONITORING.value, status=FetchStatus.SUCCESS.value)
         .all()
     ]
 

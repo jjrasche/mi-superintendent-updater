@@ -4,7 +4,7 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 from config import USER_AGENT, REQUEST_TIMEOUT
-from utils.llm import build_link_identification_prompt, call_llm
+from services.extraction import identify_transparency_link as llm_identify_link
 
 
 def find_transparency_link(domain: str, district_name: str = None) -> Dict:
@@ -136,28 +136,18 @@ def _llm_identify_transparency_link(links: List[Dict], district_name: str = None
     """Use LLM to identify transparency link."""
     from utils.debug_logger import get_logger
     logger = get_logger()
-    
+
     links_subset = links[:50]
-    
-    system_prompt, user_prompt = build_link_identification_prompt(links_subset, district_name)
-    
+
     try:
-        result = call_llm(system_prompt, user_prompt)
-        
-        # Log the LLM call
-        if district_name:
-            logger.log_llm_call(
-                district_name,
-                'transparency_link_identification',
-                system_prompt,
-                user_prompt,
-                result
-            )        
-        identified_url = result.get('url')
-        reasoning = result.get('reasoning', '')
-        
+        result = llm_identify_link(links_subset, district_name)
+
+        # Log the LLM call (simplified logging)
+        identified_url = result.url
+        reasoning = result.reasoning
+
         print(f"[TRANSPARENCY DISCOVERY] LLM reasoning: {reasoning[:150]}...")
-        
+
         # Validate that returned URL is actually in our list
         if identified_url:
             valid_urls = {link['href'] for link in links_subset}
@@ -172,12 +162,12 @@ def _llm_identify_transparency_link(links: List[Dict], district_name: str = None
                     'url': None,
                     'reasoning': f'LLM returned invalid URL: {reasoning}'
                 }
-        
+
         return {
             'url': None,
             'reasoning': reasoning
         }
-        
+
     except Exception as e:
         print(f"[TRANSPARENCY DISCOVERY] LLM identification failed: {str(e)}")
         return {

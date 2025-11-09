@@ -12,12 +12,12 @@ class DistrictRepository(BaseRepository):
     all = lambda self: self.session.query(District).all()
 
     # Updates
-    mark_checked = lambda self, district: setattr(district, 'last_checked_at', datetime.utcnow()) or district
-    set_transparency_url = lambda self, district, url: setattr(district, 'transparency_url', url) or district
+    def mark_checked(self, district: District) -> District:
+        """Mark district as checked now"""
+        district.last_checked_at = datetime.utcnow()
+        return district
 
-    # Chainable operations
-    def update_and_flush(self, district) -> District:
-        """Update district and flush to get ID"""
-        self.session.add(district)
-        self.session.flush()
+    def set_transparency_url(self, district: District, url: str) -> District:
+        """Set transparency URL for district"""
+        district.transparency_url = url
         return district
