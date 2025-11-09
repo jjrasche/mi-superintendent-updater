@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Dict, Optional
-from models.database import FetchedPage, Extraction
+from models.database import FetchedPage, Extraction, District
 from models.enums import WorkflowMode, FetchStatus
 from .base import BaseRepository
 
@@ -8,6 +8,10 @@ class SuperintendentRepository(BaseRepository):
     """Superintendent extraction data operations"""
 
     # Queries
+    get_district = lambda self, district_id: (
+        self.session.query(District).filter_by(id=district_id).first()
+    )
+
     get_monitoring_urls = lambda self, district_id: [
         row[0] for row in self.session.query(FetchedPage.url)
         .filter_by(district_id=district_id, mode=WorkflowMode.MONITORING.value, status=FetchStatus.SUCCESS.value)
@@ -68,3 +72,9 @@ class SuperintendentRepository(BaseRepository):
     def save_extraction_result(self, page_id: int, extraction_result: Dict) -> Extraction:
         """Create and save extraction from extraction result"""
         return self.save_extraction(self.create_extraction(page_id, extraction_result))
+
+    # District updates
+    def update_last_checked(self, district: District) -> District:
+        """Update district last_checked_at timestamp"""
+        district.last_checked_at = datetime.utcnow()
+        return district
