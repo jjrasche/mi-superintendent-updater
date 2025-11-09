@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from typing import List
 
 from config import REQUEST_TIMEOUT, USER_AGENT, MAX_URLS_TO_FILTER
-from utils.llm import build_url_filtering_prompt, call_llm
+from services.extraction import filter_urls as llm_filter_urls
 
 
 def discover_urls(domain: str) -> List[str]:
@@ -231,14 +231,13 @@ def filter_urls(urls: List[str], district_name: str, domain: str = None) -> tupl
         
         return html_urls, reasoning
     
-    # Build prompt and call LLM
+    # Call LLM to filter URLs
     print(f"[FILTER] Calling LLM to select top {MAX_URLS_TO_FILTER} URLs...")
-    system_prompt, user_prompt = build_url_filtering_prompt(html_urls, district_name)
-    result = call_llm(system_prompt, user_prompt)
-    
+    result = llm_filter_urls(html_urls, district_name)
+
     # Extract filtered URLs and reasoning
-    filtered_urls = result.get('urls', [])
-    llm_reasoning = result.get('reasoning', '')
+    filtered_urls = result.urls
+    llm_reasoning = result.reasoning
     
     print(f"[FILTER] LLM returned {len(filtered_urls)} URLs")
     print(f"[FILTER] LLM reasoning: {llm_reasoning[:150]}...")
