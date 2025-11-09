@@ -196,7 +196,8 @@ def build_link_identification_prompt(links: list[dict], district_name: str = Non
     system_prompt = """Identify the Budget/Salary Transparency link from Michigan school district homepage links.
 
     Michigan districts must post "Budget & Salary Compensation Transparency" data. Links are typically labeled:
-    - "State Reporting" (most common in Michigan)
+    - "AER" / "Annual Education Report" / "Annual Report"
+    - "State Reporting"
     - "Transparency Reporting" 
     - "Budget/Salary Transparency"
     - "Financial Transparency"
