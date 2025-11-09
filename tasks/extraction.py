@@ -1,7 +1,7 @@
 from typing import Dict
 
 from utils.html_parser import parse_html_to_text
-from utils.llm import build_extraction_prompt, call_llm
+from services.extraction import extract_superintendent as llm_extract
 from utils.debug_logger import get_logger
 
 def extract_superintendent(html: str, district_name: str, url: str) -> Dict:
@@ -19,36 +19,34 @@ def extract_superintendent(html: str, district_name: str, url: str) -> Dict:
             logger, district_name, url, html
         )
     
-    # Build prompts and call LLM
-    system_prompt, user_prompt = build_extraction_prompt(cleaned_text, district_name)
-    
+    # Call LLM extraction service
     try:
-        result = call_llm(system_prompt, user_prompt)
-        
+        result = llm_extract(cleaned_text, district_name)
+
         # Post-validation: title must contain "superintendent"
-        if not result.get('is_empty') and result.get('title'):
-            title_lower = result['title'].lower()
+        if not result.is_empty and result.title:
+            title_lower = result.title.lower()
             if 'superintendent' not in title_lower:
-                result = _empty_result(
+                return _empty_result(
                     cleaned_text,
-                    f"Title '{result['title']}' does not contain 'Superintendent'",
+                    f"Title '{result.title}' does not contain 'Superintendent'",
                     logger, district_name, url, html
                 )
-        
+
         # Log and return
         extraction_result = {
-            'name': result.get('name'),
-            'title': result.get('title'),
-            'email': result.get('email'),
-            'phone': result.get('phone'),
+            'name': result.name,
+            'title': result.title,
+            'email': result.email,
+            'phone': result.phone,
             'extracted_text': cleaned_text,
-            'llm_reasoning': result.get('reasoning', ''),
-            'is_empty': result.get('is_empty', False)
+            'llm_reasoning': result.reasoning,
+            'is_empty': result.is_empty
         }
-        
+
         logger.log_page_fetch(district_name, url, html, cleaned_text, extraction_result)
         return extraction_result
-        
+
     except Exception as e:
         return _empty_result(
             cleaned_text,

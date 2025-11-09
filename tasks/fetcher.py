@@ -1,7 +1,7 @@
 import requests
 from typing import Dict
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-
+from models.enums import FetchStatus
 from config import REQUEST_TIMEOUT, USER_AGENT
 
 
@@ -152,3 +152,64 @@ def fetch_page(url: str) -> Dict:
         'status': 'error',
         'error_message': 'Failed to fetch content'
     }
+
+
+def fetch_with_playwright(url: str) -> Dict:
+    """
+    Fetch page using Playwright to handle JavaScript-rendered content.
+
+    Returns:
+        {
+            'url': str,
+            'html': str,
+            'content_type': str,
+            'status': str,
+            'error_message': str | None
+        }
+    """
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=USER_AGENT,
+                ignore_https_errors=True
+            )
+            page = context.new_page()
+            page.goto(url, timeout=REQUEST_TIMEOUT * 1000, wait_until='networkidle')
+            page.wait_for_timeout(2000)
+            html = page.content()
+            browser.close()
+
+            if html and len(html.strip()) > 100:
+                return {
+                    'url': url,
+                    'html': html,
+                    'content_type': 'html',
+                    'status': FetchStatus.SUCCESS.value,
+                    'error_message': None
+                }
+            else:
+                return {
+                    'url': url,
+                    'html': '',
+                    'content_type': 'html',
+                    'status': FetchStatus.ERROR.value,
+                    'error_message': 'Empty page content'
+                }
+
+    except PlaywrightTimeout:
+        return {
+            'url': url,
+            'html': '',
+            'content_type': 'html',
+            'status': FetchStatus.TIMEOUT.value,
+            'error_message': f'Page load timeout after {REQUEST_TIMEOUT}s'
+        }
+    except Exception as e:
+        return {
+            'url': url,
+            'html': '',
+            'content_type': 'html',
+            'status': FetchStatus.ERROR.value,
+            'error_message': str(e)
+        }

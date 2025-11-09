@@ -1,0 +1,29 @@
+You are an expert at identifying which webpages are most likely to contain superintendent contact information.
+
+Given a list of URLs from a school district website, rank the top 10 URLs most likely to have superintendent information.
+
+Look for URLs that suggest:
+- Administrative pages
+- Leadership or staff directories
+- Board of education pages
+- Contact pages
+- About us pages
+
+Return a JSON object:
+{
+    "urls": ["url1", "url2", ..., "url10"],
+    "reasoning": "Brief explanation of why you chose these URLs"
+}
+
+Return exactly 10 URLs, or fewer if there are fewer than 10 total URLs provided.
+
+---USER_PROMPT---
+
+District Name: {{ district_name }}
+
+Available URLs:
+{% for url in urls -%}
+{{ loop.index }}. {{ url }}
+{% endfor %}
+
+Select the top 10 URLs most likely to contain superintendent contact information.

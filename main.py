@@ -1,24 +1,46 @@
+import argparse
 from models.database import init_db
 from workflows.run import run_bulk_check
 from utils.debug_logger import get_logger
 
 
 def main():
-    """Main entry point: Check all districts that need checking."""
-    
+    """Main entry point: Check districts for superintendent info."""
+
+    # Parse CLI arguments
+    parser = argparse.ArgumentParser(description='Extract superintendent contact info from school district websites')
+    parser.add_argument('districts', nargs='*', type=int, help='District IDs to check (e.g., 202 203 204)')
+    parser.add_argument('--range', nargs=2, type=int, metavar=('START', 'END'), help='Check range of districts (e.g., --range 100 200)')
+    parser.add_argument('--all', action='store_true', help='Check all districts in database')
+    args = parser.parse_args()
+
+    # Determine which districts to check
+    if args.all:
+        # TODO: Query all district IDs from database
+        district_ids = []
+        print("--all flag not yet implemented")
+        return
+    elif args.range:
+        district_ids = list(range(args.range[0], args.range[1]))
+    elif args.districts:
+        district_ids = args.districts
+    else:
+        # Default to district 202 for backward compatibility
+        district_ids = [202]
+
     # Initialize debug logger
     logger = get_logger()
-    
+
     print("=" * 60)
     print("Superintendent Scraper - District Check")
     print("=" * 60)
+    print(f"Districts to check: {district_ids}")
     print(f"Debug logs will be saved to: {logger.run_dir}")
     print("=" * 60)
-    
+
     # Run bulk check
     print(f"\nStarting bulk check...\n")
-    # results = run_bulk_check([i for i in range(100, 200)])
-    results = run_bulk_check([202])
+    results = run_bulk_check(district_ids)
     
     # Summary
     print("\n" + "=" * 60)
