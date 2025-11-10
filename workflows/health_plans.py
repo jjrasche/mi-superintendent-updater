@@ -25,31 +25,27 @@ def extract_district_health_plans(district_id: int) -> Dict:
         }
 
 
+def _try_extract(district_id, idx, total):
+    """Safely extract health plans with error handling"""
+    from models.enums import ExtractionStatus
+    print(f"\n[{idx}/{total}] Processing district {district_id}...")
+    try:
+        return extract_district_health_plans(district_id)
+    except Exception as e:
+        print(f"✗ Failed to check district {district_id}: {str(e)}")
+        return {
+            'district_id': district_id, 'district_name': 'Unknown',
+            'transparency_url': None, 'plans_found': 0, 'plans': [],
+            'status': ExtractionStatus.ERROR.value, 'error_message': str(e)
+        }
+
 def run_bulk_health_plan_check(district_ids: List[int]) -> List[Dict]:
     """Run health plan checks for multiple districts"""
     from utils.debug_logger import get_logger
-    from models.enums import ExtractionStatus
 
     logger = get_logger()
     _print_bulk_header(len(district_ids), logger.run_dir)
-
-    results = []
-    for idx, district_id in enumerate(district_ids, 1):
-        print(f"\n[{idx}/{len(district_ids)}] Processing district {district_id}...")
-        try:
-            results.append(extract_district_health_plans(district_id))
-        except Exception as e:
-            print(f"✗ Failed to check district {district_id}: {str(e)}")
-            results.append({
-                'district_id': district_id,
-                'district_name': 'Unknown',
-                'transparency_url': None,
-                'plans_found': 0,
-                'plans': [],
-                'status': ExtractionStatus.ERROR.value,
-                'error_message': str(e)
-            })
-
+    results = [_try_extract(d_id, idx, len(district_ids)) for idx, d_id in enumerate(district_ids, 1)]
     _print_bulk_summary(results, logger.run_dir)
     return results
 
@@ -65,15 +61,16 @@ def _print_bulk_header(count: int, log_dir: str):
 def _print_bulk_summary(results: List[Dict], log_dir: str):
     from models.enums import ExtractionStatus
 
+    _count = lambda status, condition=lambda r: True: sum(1 for r in results if r['status'] == status.value and condition(r))
+
+    successful = _count(ExtractionStatus.SUCCESS, lambda r: r['plans_found'] > 0)
+    no_link = _count(ExtractionStatus.NO_LINK)
+    no_plans = _count(ExtractionStatus.SUCCESS, lambda r: r['plans_found'] == 0)
+    errors = _count(ExtractionStatus.ERROR)
+
     print(f"\n\n{'='*60}")
     print("BULK CHECK SUMMARY")
     print(f"{'='*60}")
-
-    successful = sum(1 for r in results if r['status'] == ExtractionStatus.SUCCESS.value and r['plans_found'] > 0)
-    no_link = sum(1 for r in results if r['status'] == ExtractionStatus.NO_LINK.value)
-    no_plans = sum(1 for r in results if r['status'] == ExtractionStatus.SUCCESS.value and r['plans_found'] == 0)
-    errors = sum(1 for r in results if r['status'] == ExtractionStatus.ERROR.value)
-
     print(f"Total districts checked: {len(results)}")
     print(f"  ✓ Found plans: {successful}")
     print(f"  - No transparency link: {no_link}")

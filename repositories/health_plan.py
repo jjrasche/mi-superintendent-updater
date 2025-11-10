@@ -51,31 +51,22 @@ class HealthPlanRepository(BaseRepository):
         return plans
 
     # Domain-specific composite operations
-    def save_extracted_plans(self, district_id: int, plans_data: List[Dict], source_url: str, extraction_id: int = None) -> List[HealthPlan]:
-        """Create and save all plans from extraction result"""
-        return self.save_plans([
-            self.create_plan(district_id, plan_data, source_url, extraction_id)
-            for plan_data in plans_data
-        ])
+    save_extracted_plans = lambda self, district_id, plans_data, source_url, extraction_id=None: self.save_plans([
+        self.create_plan(district_id, plan_data, source_url, extraction_id) for plan_data in plans_data
+    ])
 
     def upsert_plan(self, district_id: int, plan_data: Dict, transparency_url: str, extraction_id: int = None) -> HealthPlan:
         """Update existing plan or create new one"""
-        existing = self.get_existing_plan(
-            district_id,
-            plan_data['plan_name'],
-            plan_data['provider'],
-            plan_data['plan_type']
-        )
+        existing = self.get_existing_plan(district_id, plan_data['plan_name'],
+                                         plan_data['provider'], plan_data['plan_type'])
 
         if existing:
-            if plan_data.get('source_url') and not existing.source_url:
-                existing.source_url = plan_data['source_url']
-            if extraction_id:
-                existing.extraction_id = extraction_id
+            existing.source_url = plan_data.get('source_url') or existing.source_url
+            existing.extraction_id = extraction_id or existing.extraction_id
             existing.extracted_at = datetime.utcnow()
             return existing
-        else:
-            return self.save_plan(self.create_plan(district_id, plan_data, transparency_url, extraction_id))
+
+        return self.save_plan(self.create_plan(district_id, plan_data, transparency_url, extraction_id))
 
     def update_transparency_url(self, district: District, url: str) -> District:
         """Update district transparency URL"""

@@ -25,3 +25,20 @@ class ExtractionType(str, Enum):
     HEALTH_PLAN = "health_plan"
     URL_FILTERING = "url_filtering"
     LINK_IDENTIFICATION = "link_identification"
+
+class ContentType(str, Enum):
+    """Content type for fetched pages"""
+    HTML = "html"
+    PDF = "pdf"
+
+class FileExtension(str, Enum):
+    """Common file extensions"""
+    PDF = ".pdf"
+    DOC = ".doc"
+    DOCX = ".docx"
+    XLS = ".xls"
+    XLSX = ".xlsx"
+    PPT = ".ppt"
+    PPTX = ".pptx"
+    ZIP = ".zip"
+    RAR = ".rar"

@@ -2,16 +2,22 @@ import os
 from pathlib import Path
 from datetime import datetime
 import json
+from functools import lru_cache
 
-# Module-level singleton
-_logger = None
+# Helper functions
+_slugify = lambda name: name.replace(' ', '_').replace('/', '_')
+_log_file_path = lambda run_dir, slug, suffix: run_dir / f"{slug}_{suffix}.json"
 
+def _write_json(file_path, data):
+    """Write JSON data to file"""
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+    return file_path
+
+@lru_cache(maxsize=1)
 def get_logger():
-    """Get or create debug logger."""
-    global _logger
-    if _logger is None:
-        _logger = DebugLogger()
-    return _logger
+    """Get or create debug logger (cached singleton)"""
+    return DebugLogger()
 
 class DebugLogger:
     """Logger for debugging scraping process."""
@@ -25,26 +31,21 @@ class DebugLogger:
         self.run_dir = self.base_dir / timestamp
         self.run_dir.mkdir(exist_ok=True)
     
-    def log_discovery(self, district_name: str, domain: str, all_urls: list, 
+    def log_discovery(self, district_name: str, domain: str, all_urls: list,
                      filtered_urls: list, llm_reasoning: str = None):
         """Log URL discovery and filtering."""
-        district_slug = district_name.replace(' ', '_').replace('/', '_')
-        log_file = self.run_dir / f"{district_slug}_discovery.json"
-        
-        data = {
-            'district': district_name,
-            'domain': domain,
-            'timestamp': datetime.now().isoformat(),
-            'total_urls_found': len(all_urls),
-            'filtered_urls_count': len(filtered_urls),
-            'all_urls': all_urls,
-            'filtered_urls': filtered_urls,
-            'llm_reasoning': llm_reasoning
-        }
-        
-        with open(log_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-        
+        log_file = _write_json(
+            _log_file_path(self.run_dir, _slugify(district_name), 'discovery'),
+            {
+                'district': district_name, 'domain': domain,
+                'timestamp': datetime.now().isoformat(),
+                'total_urls_found': len(all_urls),
+                'filtered_urls_count': len(filtered_urls),
+                'all_urls': all_urls, 'filtered_urls': filtered_urls,
+                'llm_reasoning': llm_reasoning
+            }
+        )
+
         print(f"\n[DEBUG] Discovery logged to: {log_file}")
         print(f"[DEBUG] Total URLs discovered: {len(all_urls)}")
         print(f"[DEBUG] URLs after LLM filter: {len(filtered_urls)}")

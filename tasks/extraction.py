@@ -1,10 +1,21 @@
 from typing import Optional
+from dataclasses import dataclass
 from utils.html_parser import parse_html_to_text
 from services.extraction import extract_superintendent as llm_extract
 from utils.debug_logger import get_logger
 from repositories.extraction import ExtractionRepository
 from models.enums import ExtractionType
 from models.database import SuperintendentContact
+
+@dataclass
+class ExtractionContext:
+    """Context for superintendent extraction"""
+    html: str
+    district_name: str
+    url: str
+    district_id: int
+    repo: any
+    fetched_page: any
 
 def extract_superintendent(
     html: str,
@@ -66,18 +77,16 @@ def extract_superintendent(
         extraction_repo.save_extraction(extraction)
 
         # Save domain-specific contact
-        contact_data = {
-            'name': result.name,
-            'title': result.title,
-            'email': result.email,
-            'phone': result.phone
-        }
-        contact = repo.create_contact(district_id, contact_data, extraction.id)
-        repo.save_contact(contact)
+        contact = repo.save_contact(repo.create_contact(
+            district_id,
+            {'name': result.name, 'title': result.title, 'email': result.email, 'phone': result.phone},
+            extraction.id
+        ))
 
         # Log for debugging
-        extraction_result = {**contact_data, 'llm_reasoning': result.reasoning, 'is_empty': result.is_empty}
-        logger.log_page_fetch(district_name, url, html, cleaned_text, extraction_result)
+        logger.log_page_fetch(district_name, url, html, cleaned_text,
+                             {'name': result.name, 'title': result.title, 'email': result.email,
+                              'phone': result.phone, 'llm_reasoning': result.reasoning, 'is_empty': result.is_empty})
 
         return contact
 

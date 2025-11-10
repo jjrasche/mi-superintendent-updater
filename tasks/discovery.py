@@ -111,56 +111,31 @@ def discover_urls(domain: str) -> List[str]:
     except requests.RequestException as e:
         raise ConnectionError(f"Failed to reach {domain}: {str(e)}")
 
-def _normalize_domain(domain: str) -> str:
-    """Normalize domain for comparison (remove www, lowercase)."""
-    domain = domain.lower()
-    if domain.startswith('www.'):
-        domain = domain[4:]
-    return domain
+_normalize_domain = lambda domain: domain.lower().removeprefix('www.')
+
+_SKIP_PREFIXES = ('mailto:', 'tel:', 'javascript:', 'data:', '#')
+_BAD_EXTENSIONS = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+                   '.zip', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.mp4',
+                   '.mp3', '.wav', '.avi', '.css', '.js', '.xml', '.rss'}
 
 def _is_valid_url(url: str, expected_netloc: str) -> bool:
     """Validate that URL is usable."""
     try:
-        # Check for common non-URL patterns
-        if not url or url.strip() == '':
+        if not url or not url.strip():
             return False
-        
-        # Reject email addresses (sometimes parsed as URLs)
         if '@' in url and not url.startswith(('http://', 'https://')):
             return False
-        
-        # Reject mailto/tel/javascript
-        if url.startswith(('mailto:', 'tel:', 'javascript:', 'data:', '#')):
+        if url.startswith(_SKIP_PREFIXES):
             return False
-        
+
         parsed = urlparse(url)
-        if _normalize_domain(parsed.netloc) != _normalize_domain(expected_netloc):
-            return False
-        # Must be http/https
-        if parsed.scheme not in ('http', 'https'):
-            return False
-        
-        # Must have netloc (not relative)
-        if not parsed.netloc:
-            return False
-        
-        # Must be same domain
-        if parsed.netloc != expected_netloc:
-            return False
-        
-        # No fragments
-        if parsed.fragment:
-            return False
-        
-        # Reject file extensions we don't want
         path_lower = parsed.path.lower()
-        bad_extensions = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-                         '.zip', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.mp4', 
-                         '.mp3', '.wav', '.avi', '.css', '.js', '.xml', '.rss'}
-        if any(path_lower.endswith(ext) for ext in bad_extensions):
-            return False
-        
-        return True
+
+        return (parsed.scheme in ('http', 'https') and
+                parsed.netloc and
+                _normalize_domain(parsed.netloc) == _normalize_domain(expected_netloc) and
+                not parsed.fragment and
+                not any(path_lower.endswith(ext) for ext in _BAD_EXTENSIONS))
     except:
         return False
 

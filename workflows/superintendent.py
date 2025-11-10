@@ -25,21 +25,24 @@ def run_district_check(district_id: int, observer=None) -> Dict:
         return summary
 
 
-def run_bulk_check(district_ids: List[int]) -> List[Dict]:
-    """Run district checks for multiple districts"""
-    results = []
-    for district_id in district_ids:
-        try:
-            results.append(run_district_check(district_id))
-        except Exception as e:
-            print(f"Failed to check district {district_id}: {str(e)}")
-            results.append({
-                'district_id': district_id,
-                'mode': 'error',
-                'urls_checked': 0,
-                'pages_fetched': 0,
-                'successful_extractions': 0,
-                'empty_extractions': 0,
-                'errors': 1
-            })
-    return results
+_error_result = lambda district_id: {
+    'district_id': district_id, 'mode': 'error', 'urls_checked': 0,
+    'pages_fetched': 0, 'successful_extractions': 0,
+    'empty_extractions': 0, 'errors': 1
+}
+
+_safe_check = lambda district_id: (
+    run_district_check(district_id)
+    if not (error := None)
+    else (print(f"Failed to check district {district_id}: {str(error)}") or _error_result(district_id))
+) if True else None  # Placeholder for try/except
+
+def _try_check(district_id):
+    """Safely run district check with error handling"""
+    try:
+        return run_district_check(district_id)
+    except Exception as e:
+        print(f"Failed to check district {district_id}: {str(e)}")
+        return _error_result(district_id)
+
+run_bulk_check = lambda district_ids: [_try_check(d_id) for d_id in district_ids]

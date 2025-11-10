@@ -28,18 +28,16 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
     print(f"\n[HEALTH PLAN EXTRACTION] Extracting plans for {district_name}")
     print(f"[HEALTH PLAN EXTRACTION] Content length: {len(text_content)} chars")
     
+    _empty_result = lambda reason: [{
+        'plan_name': None, 'provider': None, 'plan_type': None,
+        'coverage_details': None, 'source_url': None,
+        'is_empty': True, 'reasoning': reason
+    }]
+
     # Quick validation: empty content
     if len(text_content.strip()) < 100:
         print("[HEALTH PLAN EXTRACTION] Content too short")
-        return [{
-            'plan_name': None,
-            'provider': None,
-            'plan_type': None,
-            'coverage_details': None,
-            'source_url': None,
-            'is_empty': True,
-            'reasoning': 'Content too short (less than 100 characters)'
-        }]
+        return _empty_result('Content too short (less than 100 characters)')
     
     # Call LLM extraction service
     try:
@@ -48,48 +46,29 @@ def extract_health_plans(text_content: str, district_name: str) -> List[Dict]:
         # Extract plans and reasoning from Pydantic model
         plans = [plan.model_dump() for plan in result.plans]
         reasoning = result.reasoning
-        
+
         print(f"[HEALTH PLAN EXTRACTION] LLM returned {len(plans)} plans")
         if reasoning:
             print(f"[HEALTH PLAN EXTRACTION] LLM reasoning: {reasoning[:200]}...")
-        
+
         # Validate and clean results
-        validated_plans = []
-        for plan in plans:
-            validated_plan = _validate_plan(plan)
-            validated_plans.append(validated_plan)
-            
-            if not validated_plan['is_empty']:
-                source_info = f" → {validated_plan['source_url']}" if validated_plan['source_url'] else ""
-                print(f"[HEALTH PLAN EXTRACTION]   ✓ {validated_plan['plan_name']} "
-                      f"({validated_plan['provider']}) - {validated_plan['plan_type']}{source_info}")
-        
+        validated_plans = [_validate_plan(plan) for plan in plans]
+
+        # Print valid plans
+        [print(f"[HEALTH PLAN EXTRACTION]   ✓ {p['plan_name']} ({p['provider']}) - {p['plan_type']}"
+               f"{' → ' + p['source_url'] if p['source_url'] else ''}")
+         for p in validated_plans if not p['is_empty']]
+
         # If no valid plans found, return empty result
         if not any(not p['is_empty'] for p in validated_plans):
             print("[HEALTH PLAN EXTRACTION] No valid plans extracted")
-            return [{
-                'plan_name': None,
-                'provider': None,
-                'plan_type': None,
-                'coverage_details': None,
-                'source_url': None,
-                'is_empty': True,
-                'reasoning': reasoning or 'No health insurance plans found in content'
-            }]
-        
+            return _empty_result(reasoning or 'No health insurance plans found in content')
+
         return validated_plans
-        
+
     except Exception as e:
         print(f"[HEALTH PLAN EXTRACTION] Extraction failed: {str(e)}")
-        return [{
-            'plan_name': None,
-            'provider': None,
-            'plan_type': None,
-            'coverage_details': None,
-            'source_url': None,
-            'is_empty': True,
-            'reasoning': f'LLM extraction failed: {str(e)}'
-        }]
+        return _empty_result(f'LLM extraction failed: {str(e)}')
 
 
 def _validate_plan(plan: Dict) -> Dict:

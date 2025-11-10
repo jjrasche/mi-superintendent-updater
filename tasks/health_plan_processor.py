@@ -85,15 +85,15 @@ def process_health_plans(repo, district: District) -> Dict:
         }
     print("✓ Successfully fetched page")
 
-    content_type = fetch_result.get('content_type', 'html')
+    from models.enums import ContentType
+
+    content_type = ContentType(fetch_result.get('content_type', ContentType.HTML.value))
     raw_content = fetch_result['html']
 
     # Parse HTML to text
-    parsing_method = 'pdf_parser' if content_type == 'pdf' else 'html_parser'
-    if content_type == 'html':
-        text_content = parse_html_to_text(raw_content, preserve_document_links=True, base_url=transparency_url)
-    else:
-        text_content = extract_text_from_pdf(raw_content)
+    parsing_method = f'{content_type.value}_parser'
+    text_content = (parse_html_to_text(raw_content, preserve_document_links=True, base_url=transparency_url)
+                   if content_type == ContentType.HTML else extract_text_from_pdf(raw_content))
 
     # Extract health plans with LLM
     plans = extract_health_plans(text_content, district.name)
