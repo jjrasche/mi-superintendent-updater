@@ -1,6 +1,10 @@
 import os
 from pathlib import Path
 import urllib3
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Database
 DB_URL = os.getenv('DATABASE_URL', 'sqlite:///superintendents.db')

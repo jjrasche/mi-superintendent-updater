@@ -25,8 +25,13 @@ EXTRACTION RULES:
    - If no formal name, construct from provider + type (e.g., "Priority Health Medical")
 
 2. PROVIDER IDENTIFICATION
-   - Common providers: MESSA, Blue Cross Blue Shield (BCBS), Priority Health, HAP, Aetna, UnitedHealthcare, MPSERS
-   - Extract exact provider name as stated
+   - Common providers: MESSA, Blue Cross Blue Shield (BCBS), Priority Health, HAP, Aetna, UnitedHealthcare, MPSERS, Delta Dental, VSP, Guardian
+   - Extract exact provider name as stated in the plan name or nearby text
+   - IMPORTANT: If provider not explicitly stated, infer from context:
+     * If Vision/Dental plans appear alongside MESSA medical plans, provider is likely MESSA
+     * If plan document name contains provider (e.g., "MESSA_Vision.pdf"), use that
+     * Look in surrounding text for provider mentions
+   - LAST RESORT: If absolutely no provider info available, use "Not Specified" - NEVER use null or None
 
 3. PLAN TYPE
    - Must be one of: Medical, Dental, Vision, Disability, Life Insurance, Long-Term Care, Other
@@ -77,6 +82,20 @@ Output: {
          "coverage_details": "80/20 cost share, $1000 deductible", "source_url": null, "is_empty": false}
     ],
     "reasoning": "Found BCBS medical plan with cost sharing details, no document URL"
+}
+
+✓ CORRECT:
+Input: "Medical MESSA-ABC Plan 1 (PDF: messa.pdf) | Vision - Admin (PDF: vision_admin.pdf) | Dental - Teachers"
+Output: {
+    "plans": [
+        {"plan_name": "MESSA-ABC Plan 1", "provider": "MESSA", "plan_type": "Medical",
+         "coverage_details": null, "source_url": "messa.pdf", "is_empty": false},
+        {"plan_name": "Vision - Admin", "provider": "MESSA", "plan_type": "Vision",
+         "coverage_details": null, "source_url": "vision_admin.pdf", "is_empty": false},
+        {"plan_name": "Dental - Teachers", "provider": "MESSA", "plan_type": "Dental",
+         "coverage_details": null, "source_url": null, "is_empty": false}
+    ],
+    "reasoning": "Found 3 plans - Vision/Dental inferred to be MESSA based on context with MESSA medical plans"
 }
 
 ✗ WRONG:
