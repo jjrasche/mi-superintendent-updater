@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database
-DB_URL = os.getenv('DATABASE_URL', 'sqlite:///superintendents.db')
+DB_URL = os.getenv('DATABASE_URL', 'sqlite:///district_fetch.db')
 
 # Groq API
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -18,7 +18,7 @@ GROQ_TEMPERATURE = 0.3
 
 # HTTP Settings
 REQUEST_TIMEOUT = 10  # seconds
-USER_AGENT = 'Mozilla/5.0 (compatible; SuperintendentScraper/1.0)'
+USER_AGENT = 'Mozilla/5.0 (compatible; /1.0)'
 
 # Suppress SSL warnings when we intentionally bypass verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

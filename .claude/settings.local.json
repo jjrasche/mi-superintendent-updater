@@ -1,18 +1,18 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(git fetch:*)",
-      "Bash(git pull:*)",
-      "Bash(python:*)",
-      "Bash(source venv/Scripts/activate)",
-      "Bash(sqlite3:*)",
-      "Bash(PYTHONIOENCODING=utf-8 DATABASE_URL='sqlite:///superintendents1.db' python:*)",
-      "Bash(echo:*)",
-      "Bash(PYTHONIOENCODING=utf-8 python:*)",
-      "Bash(cat:*)",
-      "Bash(curl:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
+	"permissions": {
+		"allow": [
+			"Bash(git fetch:*)",
+			"Bash(git pull:*)",
+			"Bash(python:*)",
+			"Bash(source venv/Scripts/activate)",
+			"Bash(sqlite3:*)",
+			"Bash(PYTHONIOENCODING=utf-8 DATABASE_URL='sqlite:///district_fetch.db' python:*)",
+			"Bash(echo:*)",
+			"Bash(PYTHONIOENCODING=utf-8 python:*)",
+			"Bash(cat:*)",
+			"Bash(curl:*)"
+		],
+		"deny": [],
+		"ask": []
+	}
 }
