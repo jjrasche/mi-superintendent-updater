@@ -10,7 +10,7 @@ def process_urls(repo, district: District, urls: List[str], mode: str, observer=
     Process URLs: fetch and extract superintendent info.
 
     Returns:
-        List of {fetch_result, extraction_result} dicts
+        List of {fetch_result, contact} dicts
     """
     results = []
 
@@ -21,14 +21,21 @@ def process_urls(repo, district: District, urls: List[str], mode: str, observer=
         fetch_result = fetch_page(url)
         fetched_page = repo.save_fetch_result(district.id, url, mode, fetch_result)
 
-        extraction_result = None
+        contact = None
         if fetch_result['status'] == FetchStatus.SUCCESS.value:
-            extraction_result = extract_superintendent(fetch_result['html'], district.name, url)
-            repo.save_extraction_result(fetched_page.id, extraction_result)
+            # extract_superintendent now handles both Extraction and SuperintendentContact saves
+            contact = extract_superintendent(
+                fetch_result['html'],
+                district.name,
+                url,
+                district.id,
+                repo,
+                fetched_page
+            )
 
         result = {
             'fetch_result': fetch_result,
-            'extraction_result': extraction_result
+            'contact': contact
         }
         results.append(result)
 

@@ -1,6 +1,6 @@
 import argparse
 from models.database import init_db
-from workflows.run import run_bulk_check
+from workflows.superintendent import run_bulk_check
 from utils.debug_logger import get_logger
 
 

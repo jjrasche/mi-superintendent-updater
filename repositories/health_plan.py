@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from models.database import HealthPlan, District
+from models.database import HealthPlan, District, FetchedPage
+from models.enums import WorkflowMode, FetchStatus
 from .base import BaseRepository
 
 class HealthPlanRepository(BaseRepository):
@@ -26,9 +27,10 @@ class HealthPlanRepository(BaseRepository):
         ).first()
     )
 
-    # Factory
-    create_plan = lambda self, district_id, plan_data, source_url: HealthPlan(
+    # Domain-specific factories
+    create_plan = lambda self, district_id, plan_data, source_url, extraction_id=None: HealthPlan(
         district_id=district_id,
+        extraction_id=extraction_id,
         plan_name=plan_data['plan_name'],
         provider=plan_data['provider'],
         plan_type=plan_data['plan_type'],
@@ -37,7 +39,7 @@ class HealthPlanRepository(BaseRepository):
         extracted_at=datetime.utcnow()
     )
 
-    # Saves
+    # Domain-specific saves
     def save_plan(self, plan: HealthPlan) -> HealthPlan:
         """Save health plan"""
         self.session.add(plan)
@@ -48,15 +50,15 @@ class HealthPlanRepository(BaseRepository):
         self.session.add_all(plans)
         return plans
 
-    # Composite operations
-    def save_extracted_plans(self, district_id: int, plans_data: List[Dict], source_url: str) -> List[HealthPlan]:
+    # Domain-specific composite operations
+    def save_extracted_plans(self, district_id: int, plans_data: List[Dict], source_url: str, extraction_id: int = None) -> List[HealthPlan]:
         """Create and save all plans from extraction result"""
         return self.save_plans([
-            self.create_plan(district_id, plan_data, source_url)
+            self.create_plan(district_id, plan_data, source_url, extraction_id)
             for plan_data in plans_data
         ])
 
-    def upsert_plan(self, district_id: int, plan_data: Dict, transparency_url: str) -> HealthPlan:
+    def upsert_plan(self, district_id: int, plan_data: Dict, transparency_url: str, extraction_id: int = None) -> HealthPlan:
         """Update existing plan or create new one"""
         existing = self.get_existing_plan(
             district_id,
@@ -68,12 +70,44 @@ class HealthPlanRepository(BaseRepository):
         if existing:
             if plan_data.get('source_url') and not existing.source_url:
                 existing.source_url = plan_data['source_url']
+            if extraction_id:
+                existing.extraction_id = extraction_id
             existing.extracted_at = datetime.utcnow()
             return existing
         else:
-            return self.save_plan(self.create_plan(district_id, plan_data, transparency_url))
+            return self.save_plan(self.create_plan(district_id, plan_data, transparency_url, extraction_id))
 
     def update_transparency_url(self, district: District, url: str) -> District:
         """Update district transparency URL"""
         district.transparency_url = url
         return district
+
+    # Domain-specific fetch tracking queries
+    def get_recent_failed_fetch(self, district_id: int, url: str, days: int = 30) -> Optional[FetchedPage]:
+        """Check if this URL failed recently (404, error, or timeout)"""
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        return self.session.query(FetchedPage).filter(
+            FetchedPage.district_id == district_id,
+            FetchedPage.url == url,
+            FetchedPage.mode == WorkflowMode.HEALTH_PLAN.value,
+            FetchedPage.status != FetchStatus.SUCCESS.value,
+            FetchedPage.fetched_at > cutoff_date
+        ).order_by(FetchedPage.fetched_at.desc()).first()
+
+    def get_recent_successful_fetch(self, district_id: int, url: str, days: int = 30) -> Optional[FetchedPage]:
+        """Get recent successful fetch of this URL"""
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        return self.session.query(FetchedPage).filter(
+            FetchedPage.district_id == district_id,
+            FetchedPage.url == url,
+            FetchedPage.mode == WorkflowMode.HEALTH_PLAN.value,
+            FetchedPage.status == FetchStatus.SUCCESS.value,
+            FetchedPage.fetched_at > cutoff_date
+        ).order_by(FetchedPage.fetched_at.desc()).first()
+
+    def has_plans_for_url(self, district_id: int, url: str) -> bool:
+        """Check if we have any health plans extracted from this URL"""
+        return self.session.query(HealthPlan).filter(
+            HealthPlan.district_id == district_id,
+            HealthPlan.source_url == url
+        ).count() > 0
