@@ -54,15 +54,15 @@ class ConsoleObserver(WorkflowObserver):
 
         if extraction:
             if extraction['is_empty']:
-                print(f"  → No superintendent found")
+                print(f"  - No superintendent found")
                 if extraction['llm_reasoning']:
                     print(f"     Reason: {extraction['llm_reasoning'][:100]}")
             else:
-                print(f"  → ✓ Found: {extraction['name']}")
+                print(f"  + Found: {extraction['name']}")
                 print(f"     Title: {extraction['title']}")
                 print(f"     Email: {extraction['email']}")
         else:
-            print(f"  → ✗ Fetch failed: {fetch['error_message']}")
+            print(f"  X Fetch failed: {fetch['error_message']}")
 
     def on_complete(self, summary: Dict):
         print(f"\n{'='*60}")

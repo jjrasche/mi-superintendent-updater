@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python models/seed.py:*)",
+      "Bash(python -m models.seed:*)",
+      "Bash(pip install:*)",
+      "Bash(python main.py:*)",
+      "Bash(test:*)",
+      "Bash(pip show:*)",
+      "Bash(iconv:*)",
+      "Bash(python:*)",
+      "Bash(timeout 180 python:*)",
+      "Bash(timeout 120 python:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
