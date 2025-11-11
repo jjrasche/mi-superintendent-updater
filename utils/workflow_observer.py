@@ -48,19 +48,20 @@ class ConsoleObserver(WorkflowObserver):
 
     def on_url_processed(self, idx: int, total: int, url: str, result: Dict):
         fetch = result['fetch_result']
-        extraction = result['extraction_result']
+        contact = result.get('contact')
 
         print(f"\n[{idx}/{total}] Processing: {url}")
 
-        if extraction:
-            if extraction['is_empty']:
+        if contact:
+            # Check if extraction was empty (all fields are None)
+            is_empty = not any([contact.name, contact.title, contact.email, contact.phone])
+
+            if is_empty:
                 print(f"  - No superintendent found")
-                if extraction['llm_reasoning']:
-                    print(f"     Reason: {extraction['llm_reasoning'][:100]}")
             else:
-                print(f"  + Found: {extraction['name']}")
-                print(f"     Title: {extraction['title']}")
-                print(f"     Email: {extraction['email']}")
+                print(f"  + Found: {contact.name}")
+                print(f"     Title: {contact.title}")
+                print(f"     Email: {contact.email}")
         else:
             print(f"  X Fetch failed: {fetch['error_message']}")
 

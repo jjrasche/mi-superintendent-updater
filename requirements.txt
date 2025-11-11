@@ -11,6 +11,8 @@ playwright>=1.40.0
 # LLM
 groq>=0.4.0
 tenacity>=8.2.0
+paramiko>=3.0.0,<4.0.0  # SSH library (compatible version)
+sshtunnel>=0.4.0  # For SSH tunneling to remote LLM servers
 
 # Utilities
 python-dotenv>=1.0.0  # For loading .env files

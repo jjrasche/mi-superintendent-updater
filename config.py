@@ -24,6 +24,14 @@ OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://privatechat.setseg.org:11434/api/ge
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gpt-oss:120b')
 OLLAMA_TEMPERATURE = float(os.getenv('OLLAMA_TEMPERATURE', '0.3'))
 
+# SSH Tunnel for Remote LLM (optional - for accessing remote servers)
+SSH_TUNNEL_ENABLED = os.getenv('SSH_TUNNEL_ENABLED', 'false').lower() == 'true'
+SSH_HOST = os.getenv('SSH_HOST', 'jrasche-ai')
+SSH_REMOTE_PORT = int(os.getenv('SSH_REMOTE_PORT', '8000'))
+SSH_LOCAL_PORT = int(os.getenv('SSH_LOCAL_PORT', '8000'))
+SSH_USERNAME = os.getenv('SSH_USERNAME')  # Optional if using SSH config
+SSH_KEY_PATH = os.getenv('SSH_KEY_PATH')  # Optional if using SSH config
+
 # HTTP Settings
 REQUEST_TIMEOUT = 10  # seconds
 USER_AGENT = 'Mozilla/5.0 (compatible; /1.0)'

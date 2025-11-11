@@ -9,7 +9,8 @@ from pydantic import BaseModel, ValidationError
 from config import (
     LLM_PROVIDER,
     GROQ_API_KEY, GROQ_MODEL, GROQ_TEMPERATURE,
-    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TEMPERATURE
+    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TEMPERATURE,
+    SSH_TUNNEL_ENABLED
 )
 
 T = TypeVar('T', bound=BaseModel)
@@ -20,6 +21,14 @@ class LLMClient:
     def __init__(self):
         self.provider = LLM_PROVIDER
         self.env = Environment(loader=FileSystemLoader('prompts'))
+        self.tunnel = None
+        self.tunneled_url = None
+
+        # Initialize SSH tunnel if enabled
+        if SSH_TUNNEL_ENABLED:
+            from utils.ssh_tunnel import ssh_tunnel
+            self.tunnel = ssh_tunnel()
+            self.tunneled_url = self.tunnel.__enter__()
 
         # Initialize provider-specific client
         if self.provider == 'groq':
@@ -32,6 +41,14 @@ class LLMClient:
             self.temperature = OLLAMA_TEMPERATURE
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
+
+    def __del__(self):
+        """Clean up SSH tunnel on client destruction"""
+        if self.tunnel:
+            try:
+                self.tunnel.__exit__(None, None, None)
+            except:
+                pass
 
     # Core operations
     load_template = lambda self, name: self.env.get_template(f'{name}.txt').render
@@ -73,12 +90,28 @@ class LLMClient:
             }
         }
 
-        response = requests.post(OLLAMA_URL, json=payload, timeout=120)
+        # Use tunneled URL if SSH tunnel is enabled, otherwise use configured OLLAMA_URL
+        url = self.tunneled_url if self.tunneled_url else OLLAMA_URL
+        response = requests.post(url, json=payload, timeout=120)
         response.raise_for_status()
 
         result = response.json()
-        # Ollama returns response in 'response' field
-        return json.loads(result['response'])
+        # Ollama returns response in 'response' field, sometimes 'thinking' field for reasoning models
+        response_text = result.get('response', '') or result.get('thinking', '')
+        if not response_text:
+            raise ValueError(f"Empty response from Ollama API. Full result: {result}")
+
+        # Try to parse as JSON, if that fails try to extract JSON from markdown code blocks
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
+            import re
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(1))
+            # Last resort: assume the text itself is JSON-like and try again
+            raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _call_api(self, system_prompt: str, user_prompt: str) -> dict:
